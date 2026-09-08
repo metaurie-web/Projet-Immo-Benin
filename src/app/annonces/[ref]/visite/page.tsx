@@ -1,17 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import VisiteForm from "@/components/VisiteForm";
-import { LISTINGS, getListing } from "@/lib/data";
+import { getListing } from "@/lib/data";
 
 type Params = { params: Promise<{ ref: string }> };
 
-export function generateStaticParams() {
-  return LISTINGS.map((l) => ({ ref: l.ref }));
-}
-
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { ref } = await params;
-  const l = getListing(ref);
+  const l = await getListing(ref);
   return {
     title: l ? `Visite — ${l.title}` : "Prendre rendez-vous",
     description:
@@ -22,7 +18,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function VisitePage({ params }: Params) {
   const { ref } = await params;
-  const l = getListing(ref);
+  const l = await getListing(ref);
   if (!l) notFound();
 
   return <VisiteForm listing={l} />;

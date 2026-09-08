@@ -1,19 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LISTINGS, getListing } from "@/lib/data";
+import { getListing } from "@/lib/data";
 import { fcfa, plural } from "@/lib/format";
 
 type Params = { params: Promise<{ ref: string }> };
 
-/* Pré-génère une page statique pour chaque annonce connue au build. */
-export function generateStaticParams() {
-  return LISTINGS.map((l) => ({ ref: l.ref }));
-}
-
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { ref } = await params;
-  const l = getListing(ref);
+  const l = await getListing(ref);
   if (!l) return { title: "Annonce introuvable" };
   return {
     title: l.title,
@@ -23,7 +18,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function AnnonceDetailPage({ params }: Params) {
   const { ref } = await params;
-  const l = getListing(ref);
+  const l = await getListing(ref);
   if (!l) notFound();
 
   const specs = [

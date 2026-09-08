@@ -4,8 +4,11 @@ import Faq from "@/components/Faq";
 import NewsletterForm from "@/components/NewsletterForm";
 import { CITIES, TESTIMONIALS, getFeaturedListings } from "@/lib/data";
 
-export default function HomePage() {
-  const featured = getFeaturedListings();
+// Relire la base de données à chaque visite.
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const featured = await getFeaturedListings();
 
   return (
     <>

@@ -10,8 +10,11 @@ export const metadata: Metadata = {
     "Porto-Novo et Ouidah. Filtrez par quartier, budget, type de bien et équipements.",
 };
 
-export default function AnnoncesPage() {
-  const listings = getAllListings();
+// Toujours relire la base de données à chaque visite (les annonces changent).
+export const dynamic = "force-dynamic";
+
+export default async function AnnoncesPage() {
+  const listings = await getAllListings();
 
   return (
     <section className="wrap section">

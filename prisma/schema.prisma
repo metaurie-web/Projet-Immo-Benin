@@ -1,0 +1,70 @@
+// Schéma de la base de données.
+// On décrit ici les « tables » (appelées « modèles ») et leurs colonnes.
+// Après chaque modification de ce fichier : `npx prisma migrate dev`.
+// Doc : https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Une annonce de logement à louer.
+model Listing {
+  id           Int      @id @default(autoincrement())
+  ref          String   @unique // référence publique, ex. "MA-1042"
+
+  title        String
+  city         String
+  quartier     String
+  type         String // "Chambre-salon" | "Appartement" | "Maison basse" | "Villa"
+  price        Int // loyer mensuel, en FCFA
+  rooms        Int
+  furnished    Boolean
+  meter        String // "individuel" | "partagé"
+  water        String
+  parking      Boolean
+  advance      String
+  deposit      String
+  landmark     String
+  description  String
+  totalIn      Int // total à verser à l'entrée, en FCFA
+  featured     Boolean  @default(false)
+  publishedAt  String // libellé lisible ("il y a 3 jours") — deviendra une vraie date plus tard
+
+  // Propriétaire : pour l'instant de simples champs texte.
+  // Deviendra une relation vers un modèle `Owner` à l'étape authentification.
+  owner        String
+  ownerSince   String
+  ownerCount   Int
+
+  // Note moyenne + nombre d'avis (résumé affiché dans les listes).
+  rating       String
+  reviewsCount Int
+
+  // Champs "liste" : SQLite ne gère pas les tableaux, on stocke du JSON.
+  photos       Json // string[]  — libellés des photos
+  costRows     Json // { k: string; v: string }[] — lignes du tableau "ce que vous payez"
+
+  reviews      Review[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+/// Un avis laissé par un visiteur sur une annonce.
+model Review {
+  id         Int      @id @default(autoincrement())
+  listing    Listing  @relation(fields: [listingRef], references: [ref], onDelete: Cascade)
+  listingRef String
+
+  who        String
+  when       String
+  stars      String
+  text       String
+
+  createdAt  DateTime @default(now())
+}
