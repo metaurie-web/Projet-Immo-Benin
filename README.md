@@ -45,9 +45,33 @@ npm install
 dans un dossier `node_modules/` (créé automatiquement, jamais à modifier à la
 main). Ça peut prendre une à deux minutes la première fois.
 
+> **npm 11+** peut afficher un avertissement « install scripts not covered by
+> allowScripts » et proposer `npm install-scripts approve <pkg>`. C'est une
+> sécurité : les paquets autorisés sont listés dans `package.json` (champ
+> `allowScripts`) et déjà validés pour ce projet.
+
 ---
 
-## 3. Lancer le site en développement
+## 3. Préparer la base de données (à faire une seule fois)
+
+Le projet utilise **SQLite** en local : la base est un simple fichier,
+`prisma/dev.db`, créé par les commandes ci-dessous. Rien à installer.
+
+```powershell
+Copy-Item .env.example .env
+npm run db:migrate
+npm run db:seed
+```
+
+- `Copy-Item .env.example .env` crée le fichier `.env` avec `DATABASE_URL="file:./dev.db"`
+- `npm run db:migrate` crée les tables (`Listing`, `Review`) dans `prisma/dev.db`
+- `npm run db:seed` y insère les 12 annonces de démonstration
+
+Pour **repartir de zéro** (vider et re-remplir la base) : `npm run db:reset`.
+
+---
+
+## 4. Lancer le site en développement
 
 ```powershell
 npm run dev
@@ -60,14 +84,19 @@ recharge toute seule. Pour arrêter le serveur : `Ctrl + C` dans le terminal.
 
 ---
 
-## 4. Structure du projet
+## 5. Structure du projet
 
 ```
 mon-appart/
-├─ package.json          Liste des dépendances et des commandes (dev, build…)
+├─ package.json          Dépendances et commandes (dev, build, db:*…)
 ├─ tsconfig.json         Réglages TypeScript
 ├─ next.config.mjs       Configuration Next.js
-├─ .env.example          Modèle des variables secrètes (base de données, emails)
+├─ .env.example          Modèle de .env (à copier en .env)
+├─ prisma/
+│  ├─ schema.prisma      Description des tables de la base de données
+│  ├─ migrations/        Historique des changements de schéma (à committer)
+│  ├─ seed.mjs           Insère les 12 annonces de démonstration
+│  └─ dev.db             La base SQLite locale (ignorée par git)
 ├─ public/               Fichiers servis tels quels (favicon…)
 └─ src/
    ├─ app/               Les pages (routage par dossier)
@@ -97,7 +126,8 @@ mon-appart/
    └─ lib/               Code non visuel
       ├─ types.ts         Formes des données (Listing, City…)
       ├─ format.ts        fcfa(), fmt() — mise en forme des montants
-      └─ data.ts          Données de démonstration + fonctions d'accès
+      ├─ db.ts            L'instance unique de connexion à la base (Prisma)
+      └─ data.ts          Lecture des annonces en base + contenus éditoriaux
 ```
 
 ### Composant « serveur » ou « client » ?
@@ -112,27 +142,46 @@ mon-appart/
 
 ---
 
-## 5. Ce qui n'est PAS encore branché
+## 6. La base de données (Prisma)
 
-Tout ce qui « enverrait » vraiment quelque chose est aujourd'hui une
-**démonstration** :
+**Prisma** est l'outil qui parle à la base en TypeScript. Le principe :
 
-| Action | État actuel | Étape suivante |
-|---|---|---|
-| Recherche / filtres | ✅ fonctionne (en mémoire) | brancher sur la base de données |
-| Demande de visite | affiche un message, rien n'est envoyé | route API + email au propriétaire |
-| Alerte SMS | idem | route API + service de SMS/email |
-| Publier un bien | assistant complet, rien n'est enregistré | upload photos + base de données |
-| Paiement de la commission | bouton « simulé » | intégration MTN MoMo / Moov Money |
-| Espace propriétaire / Admin | données écrites en dur dans le code | base de données + authentification |
+1. On décrit les tables dans `prisma/schema.prisma`
+2. `npm run db:migrate` applique les changements à la vraie base
+3. Dans le code, on écrit `prisma.listing.findMany()` etc. — jamais de SQL à la main
 
-Les données de démonstration sont toutes dans `src/lib/data.ts`. Quand on
-passera à la base de données, ce sont surtout les fonctions `getAllListings()`,
-`getListing()` etc. qui changeront — les pages, elles, bougeront peu.
+Voir et modifier les données à la souris, dans le navigateur :
+
+```powershell
+npm run db:studio
+```
+
+Aujourd'hui, **les annonces viennent de la base**. Les fonctions
+`getAllListings()`, `getFeaturedListings()` et `getListing()` de
+`src/lib/data.ts` font une requête Prisma (elles sont donc `async` — les pages
+les « attendent » avec `await`).
+
+Restent écrits en dur, pour l'instant : les villes, la FAQ, les témoignages,
+les créneaux de visite (`src/lib/data.ts`) et les données des pages
+**espace propriétaire** et **admin**.
 
 ---
 
-## 6. Commandes utiles
+## 7. Ce qui n'est PAS encore branché
+
+| Action | État actuel | Étape suivante |
+|---|---|---|
+| Recherche / filtres | ✅ lit la base de données | — |
+| Fiche d'un bien | ✅ lit la base de données | — |
+| Demande de visite | affiche un message, rien n'est envoyé | route API + enregistrement + email au propriétaire |
+| Alerte SMS | idem | route API + service de SMS/email |
+| Publier un bien | assistant complet, rien n'est enregistré | authentification + enregistrement + upload photos |
+| Paiement de la commission | bouton « simulé » | intégration MTN MoMo / Moov Money |
+| Espace propriétaire / Admin | données écrites en dur | base de données + authentification |
+
+---
+
+## 8. Commandes utiles
 
 | Commande | Effet |
 |---|---|
@@ -140,3 +189,7 @@ passera à la base de données, ce sont surtout les fonctions `getAllListings()`
 | `npm run build` | Fabrique la version optimisée pour la mise en ligne |
 | `npm start` | Lance la version fabriquée par `build` |
 | `npm run lint` | Vérifie le style du code |
+| `npm run db:migrate` | Applique les changements de `schema.prisma` à la base |
+| `npm run db:seed` | (Re)remplit la base avec les 12 annonces de démo |
+| `npm run db:reset` | Vide la base, rejoue les migrations, re-remplit |
+| `npm run db:studio` | Ouvre l'explorateur de base dans le navigateur |
