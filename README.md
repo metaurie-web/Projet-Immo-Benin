@@ -84,7 +84,31 @@ recharge toute seule. Pour arrêter le serveur : `Ctrl + C` dans le terminal.
 
 ---
 
-## 5. Structure du projet
+## 5. Se connecter (lien magique)
+
+Le site utilise une connexion **sans mot de passe** : on indique son email,
+on reçoit un lien, on clique dessus.
+
+1. Aller sur <http://localhost:3000/connexion>
+2. Taper un email (le tien, par exemple) et cliquer « Recevoir mon lien de connexion »
+3. **Regarder le terminal** où tourne `npm run dev` : tant qu'aucun service
+   d'emails n'est configuré (voir § 8), le lien s'affiche là plutôt que
+   d'être vraiment envoyé — pratique pour tester sans rien créer
+4. Copier-coller ce lien dans le navigateur → connecté
+
+Par défaut, un compte est créé avec le rôle `"proprietaire"`. Pour te donner
+le rôle **admin** (accès à `/admin`) :
+
+```powershell
+npm run make-admin -- ton-email@exemple.com
+```
+
+Pas besoin de se reconnecter après : la page `/admin` prend en compte le
+nouveau rôle immédiatement.
+
+---
+
+## 6. Structure du projet
 
 ```
 mon-appart/
@@ -96,6 +120,7 @@ mon-appart/
 │  ├─ schema.prisma      Description des tables de la base de données
 │  ├─ migrations/        Historique des changements de schéma (à committer)
 │  ├─ seed.mjs           Insère les 12 annonces de démonstration
+│  ├─ make-admin.mjs     Donne le rôle admin à un compte (par email)
 │  └─ dev.db             La base SQLite locale (ignorée par git)
 ├─ public/               Fichiers servis tels quels (favicon…)
 └─ src/
@@ -104,17 +129,23 @@ mon-appart/
    │  ├─ globals.css             Le design system (repris du site statique)
    │  ├─ page.tsx                Accueil            → /
    │  ├─ not-found.tsx           Page 404
+   │  ├─ connexion/
+   │  │  ├─ page.tsx             Formulaire de connexion → /connexion
+   │  │  └─ verification/page.tsx  « Vérifiez votre boîte mail »
+   │  ├─ api/auth/[...nextauth]/route.ts  Routes de next-auth (ne pas modifier)
    │  ├─ annonces/
    │  │  ├─ page.tsx             Liste + filtres    → /annonces
    │  │  └─ [ref]/
    │  │     ├─ page.tsx          Fiche d'un bien    → /annonces/MA-1042
    │  │     └─ visite/page.tsx   Prise de rendez-vous → /annonces/MA-1042/visite
    │  ├─ publier/page.tsx        Assistant propriétaire → /publier
-   │  ├─ espace-proprietaire/page.tsx  Tableau de bord → /espace-proprietaire
-   │  └─ admin/page.tsx          File de modération → /admin
+   │  ├─ espace-proprietaire/page.tsx  Tableau de bord (connexion requise) → /espace-proprietaire
+   │  └─ admin/page.tsx          File de modération (rôle admin requis) → /admin
    │
    ├─ components/         Morceaux d'interface réutilisables
    │  ├─ SiteHeader.tsx / Nav.tsx / SiteFooter.tsx
+   │  ├─ AuthProvider.tsx        Contexte de session (nécessaire à useSession())
+   │  ├─ SignInForm.tsx          Formulaire de /connexion
    │  ├─ ListingCard.tsx / Faq.tsx
    │  ├─ AnnoncesBrowser.tsx     Filtres de recherche (interactif)
    │  ├─ VisiteForm.tsx          Choix du créneau + formulaire
@@ -123,11 +154,16 @@ mon-appart/
    │  ├─ ConfirmButton.tsx       Bouton « Confirmer » (espace propriétaire)
    │  └─ ModerationActions.tsx   Boutons Valider / Refuser (admin)
    │
-   └─ lib/               Code non visuel
-      ├─ types.ts         Formes des données (Listing, City…)
-      ├─ format.ts        fcfa(), fmt() — mise en forme des montants
-      ├─ db.ts            L'instance unique de connexion à la base (Prisma)
-      └─ data.ts          Lecture des annonces en base + contenus éditoriaux
+   ├─ lib/                Code non visuel
+   │  ├─ types.ts          Formes des données (Listing, City…)
+   │  ├─ format.ts         fcfa(), fmt() — mise en forme des montants
+   │  ├─ db.ts             L'instance unique de connexion à la base (Prisma)
+   │  ├─ data.ts           Lecture des annonces en base + contenus éditoriaux
+   │  ├─ auth.ts           Configuration next-auth (fournisseur, sessions, rôles)
+   │  └─ mail.ts           Envoi de l'email de connexion (Resend, ou console)
+   │
+   └─ types/
+      └─ next-auth.d.ts    Ajoute id/role aux types de session next-auth
 ```
 
 ### Composant « serveur » ou « client » ?
@@ -142,7 +178,7 @@ mon-appart/
 
 ---
 
-## 6. La base de données (Prisma)
+## 7. La base de données (Prisma)
 
 **Prisma** est l'outil qui parle à la base en TypeScript. Le principe :
 
@@ -167,21 +203,44 @@ les créneaux de visite (`src/lib/data.ts`) et les données des pages
 
 ---
 
-## 7. Ce qui n'est PAS encore branché
+## 8. L'authentification (Auth.js / next-auth)
+
+Connexion **par lien magique uniquement** : pas de mot de passe, pas de
+champ à sécuriser nous-mêmes.
+
+- **Fournisseur** : `EmailProvider` de next-auth (`src/lib/auth.ts`)
+- **Sessions** : stockées en base (table `Session`), pas en JWT — un
+  changement de rôle prend effet tout de suite, sans reconnexion
+- **Rôles** : chaque `User` a un `role` (`"proprietaire"` par défaut, ou
+  `"admin"`) ; `session.user.role` est disponible partout (voir
+  `src/types/next-auth.d.ts`)
+- **Pages protégées** : `/espace-proprietaire` (connexion requise) et
+  `/admin` (rôle `admin` requis) redirigent ou affichent un message sinon
+  — voir le début de chaque `page.tsx`
+- **Envoi de l'email** (`src/lib/mail.ts`) :
+  - sans `RESEND_API_KEY` dans `.env` → le lien s'affiche dans le terminal
+    (`npm run dev`), pratique pour développer sans rien créer
+  - avec une clé Resend → l'email part pour de vrai. Compte gratuit sur
+    <https://resend.com>, la clé se colle dans `.env` (`RESEND_API_KEY=...`)
+
+---
+
+## 9. Ce qui n'est PAS encore branché
 
 | Action | État actuel | Étape suivante |
 |---|---|---|
 | Recherche / filtres | ✅ lit la base de données | — |
 | Fiche d'un bien | ✅ lit la base de données | — |
-| Demande de visite | affiche un message, rien n'est envoyé | route API + enregistrement + email au propriétaire |
+| Connexion (lien magique) | ✅ fonctionne, rôles proprietaire/admin | — |
+| Demande de visite | affiche un message, rien n'est envoyé | enregistrement + email au propriétaire |
 | Alerte SMS | idem | route API + service de SMS/email |
-| Publier un bien | assistant complet, rien n'est enregistré | authentification + enregistrement + upload photos |
+| Publier un bien | assistant complet, rien n'est enregistré | enregistrement lié au compte + upload photos |
 | Paiement de la commission | bouton « simulé » | intégration MTN MoMo / Moov Money |
-| Espace propriétaire / Admin | données écrites en dur | base de données + authentification |
+| Espace propriétaire / Admin | connexion protégée, mais données encore écrites en dur | brancher à la base, filtrées par compte |
 
 ---
 
-## 8. Commandes utiles
+## 10. Commandes utiles
 
 | Commande | Effet |
 |---|---|
@@ -193,3 +252,4 @@ les créneaux de visite (`src/lib/data.ts`) et les données des pages
 | `npm run db:seed` | (Re)remplit la base avec les 12 annonces de démo |
 | `npm run db:reset` | Vide la base, rejoue les migrations, re-remplit |
 | `npm run db:studio` | Ouvre l'explorateur de base dans le navigateur |
+| `npm run make-admin -- email@exemple.com` | Donne le rôle admin à ce compte |
