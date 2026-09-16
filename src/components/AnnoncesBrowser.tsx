@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { Listing } from "@/lib/types";
 import { fcfa, fmt, plural } from "@/lib/format";
+import ListingPhoto from "@/components/ListingPhoto";
 
 const TYPES = ["Chambre-salon", "Appartement", "Maison basse", "Villa"] as const;
 
@@ -235,9 +236,7 @@ export default function AnnoncesBrowser({ listings }: { listings: Listing[] }) {
             results.map((l) => (
               <article className="listing-row" key={l.ref}>
                 <div className="listing-row__media">
-                  <div className="photo">
-                    <span>{l.photos[0]}</span>
-                  </div>
+                  <ListingPhoto src={l.photos[0]} sizes="(min-width: 640px) 215px, 40vw" />
                 </div>
                 <div className="listing-row__body">
                   <div className="listing-row__head">

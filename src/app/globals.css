@@ -380,6 +380,22 @@ h3.display  { font-size: clamp(24px, 2.6vw, 34px); line-height: 1.12; }
 .photo--tall { aspect-ratio: 1093 / 1600; }
 .photo--wide { aspect-ratio: 3 / 2; }
 .photo--square { aspect-ratio: 1 / 1; }
+/* Une vraie photo (URL) remplit le cadre sans la marge réservée à l'étiquette. */
+.photo--filled { padding: 0; }
+
+/* Cache visuellement un élément tout en le gardant accessible au clavier
+   et aux lecteurs d'écran (ex. le vrai <input type="file"> sous un bouton). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* ---------- 9. Statistiques ------------------------------------------ */
 .stat-grid {

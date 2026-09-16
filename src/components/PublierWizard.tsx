@@ -5,6 +5,9 @@ import { useState } from "react";
 import { COMMISSION } from "@/lib/data";
 import { fcfa, fmt } from "@/lib/format";
 import { publishListing, type PublishInput } from "@/app/publier/actions";
+import PhotoUploadSlot from "@/components/PhotoUploadSlot";
+
+const PHOTO_LABELS = ["Façade", "Séjour", "Chambre", "Cuisine et douche"] as const;
 
 /* Assistant de publication en 3 étapes.
    Les informations sont réellement enregistrées en base (étape 3, bouton
@@ -42,6 +45,7 @@ const INITIAL_FORM: PublishInput = {
   deposit: "1 mois",
   landmark: "",
   description: "",
+  photos: [...PHOTO_LABELS],
 };
 
 const commissionLabel = fmt(COMMISSION);
@@ -300,19 +304,27 @@ export default function PublierWizard() {
 
           <div className="form-grid__full">
             <span className="filters__legend" style={{ marginBottom: 9 }}>
-              Photos du bien — 4 minimum
+              Photos du bien — clique sur un emplacement pour envoyer une image
             </span>
             <div className="upload-grid">
-              {["Façade", "Séjour", "Chambre", "Cuisine et douche"].map((p) => (
-                <div className="upload-slot" key={p}>
-                  <span className="upload-slot__plus">+</span>
-                  <span>{p}</span>
-                </div>
+              {PHOTO_LABELS.map((label, i) => (
+                <PhotoUploadSlot
+                  key={label}
+                  label={label}
+                  value={form.photos[i]}
+                  onChange={(url) =>
+                    setForm((f) => {
+                      const photos = [...f.photos];
+                      photos[i] = url;
+                      return { ...f, photos };
+                    })
+                  }
+                />
               ))}
             </div>
             <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "var(--grey)" }}>
-              L&apos;envoi de vraies photos arrive dans une prochaine étape. En attendant,
-              l&apos;annonce est publiée avec des vignettes de démonstration.
+              JPEG, PNG ou WebP, 8 Mo maximum par photo. Un emplacement laissé vide garde une
+              vignette de démonstration à sa place.
             </p>
           </div>
 

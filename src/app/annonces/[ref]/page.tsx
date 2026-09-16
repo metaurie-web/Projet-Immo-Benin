@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getListing } from "@/lib/data";
 import { fcfa, plural } from "@/lib/format";
+import ListingPhoto from "@/components/ListingPhoto";
 
 type Params = { params: Promise<{ ref: string }> };
 
@@ -47,15 +48,16 @@ export default async function AnnonceDetailPage({ params }: Params) {
 
       <div className="gallery">
         <div className="gallery__main">
-          <div className="photo photo--wide">
-            <span>Photo principale — {l.photos[0]}</span>
-          </div>
+          <ListingPhoto
+            src={l.photos[0]}
+            className="photo--wide"
+            caption={`Photo principale — ${l.photos[0]}`}
+            sizes="(min-width: 900px) 700px, 90vw"
+          />
         </div>
         <div className="gallery__side">
-          {l.photos.slice(1, 3).map((p) => (
-            <div className="photo photo--square" key={p}>
-              <span>{p}</span>
-            </div>
+          {l.photos.slice(1, 3).map((p, i) => (
+            <ListingPhoto key={i} src={p} className="photo--square" sizes="200px" />
           ))}
         </div>
       </div>

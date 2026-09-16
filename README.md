@@ -132,7 +132,9 @@ mon-appart/
    │  ├─ connexion/
    │  │  ├─ page.tsx             Formulaire de connexion → /connexion
    │  │  └─ verification/page.tsx  « Vérifiez votre boîte mail »
-   │  ├─ api/auth/[...nextauth]/route.ts  Routes de next-auth (ne pas modifier)
+   │  ├─ api/
+   │  │  ├─ auth/[...nextauth]/route.ts  Routes de next-auth (ne pas modifier)
+   │  │  └─ upload/route.ts      Délivre un jeton d'upload Vercel Blob (connexion requise)
    │  ├─ annonces/
    │  │  ├─ page.tsx             Liste + filtres    → /annonces (annonces "en_ligne" uniquement)
    │  │  └─ [ref]/
@@ -151,6 +153,8 @@ mon-appart/
    │  ├─ AuthProvider.tsx        Contexte de session (nécessaire à useSession())
    │  ├─ SignInForm.tsx          Formulaire de /connexion
    │  ├─ ListingCard.tsx / Faq.tsx
+   │  ├─ ListingPhoto.tsx        Vraie photo (URL) ou vignette de démonstration
+   │  ├─ PhotoUploadSlot.tsx     Envoie une photo vers Vercel Blob (formulaire /publier)
    │  ├─ AnnoncesBrowser.tsx     Filtres de recherche (interactif)
    │  ├─ VisiteForm.tsx          Choix du créneau + formulaire
    │  ├─ PublierWizard.tsx       Assistant 3 étapes
@@ -252,20 +256,48 @@ en_attente  →  en_ligne              (visible sur /annonces et sa fiche)
 - `/espace-proprietaire` affiche les vraies annonces du compte connecté
   (`getListingsByOwner()`), avec leur statut
 
-Pas encore réel : l'upload des photos (vignettes de démonstration en
-attendant) et le paiement de la commission (publication gratuite tant que
+Pas encore réel : le contrôle des documents (pièce d'identité, titre de
+propriété) et le paiement de la commission (publication gratuite tant que
 Mobile Money n'est pas branché).
 
 ---
 
-## 10. Ce qui n'est PAS encore branché
+## 10. L'envoi de photos (Vercel Blob)
+
+Chaque emplacement de `/publier` (Façade, Séjour, Chambre, Cuisine) envoie la
+photo **directement du navigateur vers Vercel Blob** — le fichier ne passe
+jamais par notre serveur, ce qui évite les limites de taille des fonctions
+serverless.
+
+- `src/app/api/upload/route.ts` : ne transporte pas le fichier, délivre juste
+  un jeton d'upload de courte durée — et vérifie qu'une personne est
+  connectée avant de le délivrer
+- `src/components/PhotoUploadSlot.tsx` : déclenche l'envoi via `upload()`
+  (`@vercel/blob/client`), affiche un aperçu une fois terminé
+- `src/components/ListingPhoto.tsx` : affiche la vraie photo si le champ
+  contient une URL, sinon la vignette de démonstration habituelle — un
+  emplacement resté vide n'empêche pas de publier
+- Les photos sont servies via `next/image` (redimensionnement, formats
+  optimisés) : le domaine Vercel Blob est autorisé dans `next.config.mjs`
+
+Sans `BLOB_READ_WRITE_TOKEN` dans `.env`, les emplacements de photo restent
+inertes et l'annonce garde ses vignettes de démonstration — aucune erreur,
+juste pas de vraies photos. Jeton gratuit dans le dashboard Vercel,
+**Storage → Blob**, en choisissant un store à **accès public** (un store
+privé, pensé pour des fichiers sensibles, ne fonctionne pas pour des photos
+destinées à être vues publiquement).
+
+---
+
+## 11. Ce qui n'est PAS encore branché
 
 | Action | État actuel | Étape suivante |
 |---|---|---|
 | Recherche / filtres | ✅ lit la base de données | — |
 | Fiche d'un bien | ✅ lit la base de données | — |
 | Connexion (lien magique) | ✅ fonctionne, rôles proprietaire/admin | — |
-| Publier un bien | ✅ enregistré en base, file de modération réelle | upload des vraies photos |
+| Publier un bien | ✅ enregistré en base, file de modération réelle | — |
+| Photos | ✅ vrai upload (Vercel Blob) | documents d'identité / titre de propriété |
 | Espace propriétaire | ✅ vraies annonces du compte connecté | demandes de visite réelles |
 | Admin | ✅ vraie file de modération | contrôle de documents (pièce d'identité, titre) |
 | Demande de visite | affiche un message, rien n'est envoyé | enregistrement + email au propriétaire |
@@ -274,7 +306,7 @@ Mobile Money n'est pas branché).
 
 ---
 
-## 11. Commandes utiles
+## 12. Commandes utiles
 
 | Commande | Effet |
 |---|---|

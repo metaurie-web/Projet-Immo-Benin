@@ -32,6 +32,9 @@ const publishSchema = z.object({
     .string()
     .trim()
     .min(30, "Décris le logement en quelques phrases (30 caractères minimum)."),
+  // Une entrée par emplacement : soit l'URL d'une vraie photo envoyée sur
+  // Vercel Blob, soit le libellé de démonstration si l'emplacement est resté vide.
+  photos: z.array(z.string().min(1)).length(4),
 });
 
 export type PublishInput = z.infer<typeof publishSchema>;
@@ -97,9 +100,8 @@ export async function publishListing(input: PublishInput): Promise<PublishResult
       rating: "—",
       reviewsCount: 0,
 
-      // Photos et documents réels : étape suivante (upload). En attendant,
-      // les mêmes vignettes de démonstration que le reste du site.
-      photos: ["Façade", "Séjour", "Chambre", "Cuisine et douche"],
+      // Documents réels (pièce d'identité, titre) : étape suivante.
+      photos: v.photos,
 
       costRows: [
         { k: "Loyer mensuel", v: fcfa(v.price) },

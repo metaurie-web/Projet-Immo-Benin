@@ -1,15 +1,14 @@
 import Link from "next/link";
 import type { Listing } from "@/lib/types";
 import { fcfa, plural } from "@/lib/format";
+import ListingPhoto from "@/components/ListingPhoto";
 
 export default function ListingCard({ listing }: { listing: Listing }) {
   const l = listing;
   return (
     <article className="listing-card">
       <div className="listing-card__media">
-        <div className="photo">
-          <span>{l.photos[0]}</span>
-        </div>
+        <ListingPhoto src={l.photos[0]} sizes="(min-width: 900px) 285px, 45vw" />
       </div>
       <div className="listing-card__body">
         <p className="listing-card__area">
