@@ -35,11 +35,23 @@ model Listing {
   featured     Boolean  @default(false)
   publishedAt  String // libellé lisible ("il y a 3 jours") — deviendra une vraie date plus tard
 
-  // Propriétaire : pour l'instant de simples champs texte.
-  // Deviendra une relation vers un modèle `Owner` à l'étape authentification.
+  /// Cycle de vie d'une annonce :
+  /// "en_attente" (déposée, pas encore contrôlée) → "en_ligne" (validée, visible
+  /// publiquement) ou "correction_demandee" / "refusee". "expiree" plus tard.
+  /// Les 12 annonces de démonstration restent "en_ligne" (valeur par défaut).
+  status       String   @default("en_ligne")
+
+  // Nom affiché du propriétaire sur l'annonce (texte libre, peut différer du
+  // compte connecté — ex. "M. Adjovi Kossi" plutôt qu'un email).
   owner        String
   ownerSince   String
   ownerCount   Int
+
+  // Compte propriétaire réellement connecté (optionnel : les annonces de
+  // démonstration n'en ont pas). C'est lui qui détermine ce qui apparaît
+  // dans /espace-proprietaire.
+  ownerId      String?
+  ownerAccount User?    @relation(fields: [ownerId], references: [id], onDelete: SetNull)
 
   // Note moyenne + nombre d'avis (résumé affiché dans les listes).
   rating       String
@@ -88,6 +100,7 @@ model User {
 
   accounts      Account[]
   sessions      Session[]
+  listings      Listing[]
 
   createdAt     DateTime  @default(now())
 }

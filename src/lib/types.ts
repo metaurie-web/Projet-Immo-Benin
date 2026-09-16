@@ -6,6 +6,14 @@
 export type PropertyType = "Chambre-salon" | "Appartement" | "Maison basse" | "Villa";
 export type MeterKind = "individuel" | "partagé";
 
+/** Cycle de vie d'une annonce, de son dépôt à sa mise en ligne. */
+export type ListingStatus =
+  | "en_attente"
+  | "en_ligne"
+  | "correction_demandee"
+  | "refusee"
+  | "expiree";
+
 export interface CostRow {
   k: string;
   v: string;
@@ -35,16 +43,20 @@ export interface Listing {
   owner: string;
   ownerSince: string;
   ownerCount: number;
+  /** Identifiant du compte propriétaire connecté ; null pour les annonces de démonstration. */
+  ownerId: string | null;
   rating: string;
   reviews: number;
   publishedAt: string;
   featured: boolean;
+  status: ListingStatus;
   landmark: string;
   description: string;
   photos: string[];
   costRows: CostRow[];
   totalIn: number;
   reviewList: Review[];
+  createdAt: Date;
 }
 
 export interface City {

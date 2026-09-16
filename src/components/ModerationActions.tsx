@@ -1,19 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { moderateListing, type ModerationOutcome } from "@/app/admin/actions";
 
-type Outcome = "valid" | "fix" | "reject";
-
-const LABELS: Record<Outcome, string> = {
+const LABELS: Record<ModerationOutcome, string> = {
   valid: "Validée ✓",
   fix: "Correction demandée",
   reject: "Refusée",
 };
 
 /* Boutons de modération d'une annonce en attente (page Admin).
-   Démonstration : le clic remplace les boutons par une étiquette. */
-export default function ModerationActions() {
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
+   Appelle réellement moderateListing() : le statut change en base. */
+export default function ModerationActions({ listingRef }: { listingRef: string }) {
+  const [outcome, setOutcome] = useState<ModerationOutcome | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function act(o: ModerationOutcome) {
+    setError(null);
+    startTransition(async () => {
+      const result = await moderateListing(listingRef, o);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setOutcome(o);
+    });
+  }
 
   if (outcome) {
     return (
@@ -25,20 +38,25 @@ export default function ModerationActions() {
 
   return (
     <div className="mod-card__actions">
-      <button className="btn btn--sm" type="button" onClick={() => setOutcome("valid")}>
+      {error && (
+        <p style={{ fontSize: 12, color: "#c0392b", margin: "0 0 6px", maxWidth: 180 }}>{error}</p>
+      )}
+      <button className="btn btn--sm" type="button" onClick={() => act("valid")} disabled={pending}>
         Valider
       </button>
       <button
         className="btn btn--sm btn--ghost"
         type="button"
-        onClick={() => setOutcome("fix")}
+        onClick={() => act("fix")}
+        disabled={pending}
       >
         Demander une correction
       </button>
       <button
         className="link-underline"
         type="button"
-        onClick={() => setOutcome("reject")}
+        onClick={() => act("reject")}
+        disabled={pending}
         style={{ borderColor: "var(--hair)", color: "var(--grey)" }}
       >
         Refuser
