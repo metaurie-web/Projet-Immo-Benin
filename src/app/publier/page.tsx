@@ -6,14 +6,18 @@ import PublierWizard from "@/components/PublierWizard";
 
 export const metadata: Metadata = {
   title: "Publier un bien",
-  description:
-    "Publiez votre logement en trois étapes : informations et photos, vérification de " +
-    "votre identité et de votre titre, puis publication. Commission de 5 000 FCFA pour 30 jours.",
+  description: "Publiez votre logement en deux étapes : informations et photos, puis publication.",
 };
 
 export default async function PublierPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/connexion?callbackUrl=/publier");
+
+  // L'identité se vérifie une seule fois, avant la toute première annonce —
+  // pas à chaque publication (voir /verification-identite).
+  if (session.user.verificationStatus !== "verifie") {
+    redirect("/verification-identite?callbackUrl=/publier");
+  }
 
   return <PublierWizard />;
 }

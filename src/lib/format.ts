@@ -1,6 +1,6 @@
 /* Petites fonctions de mise en forme réutilisées dans toute l'application. */
 
-import type { ListingStatus } from "./types";
+import type { ListingStatus, VerificationStatus } from "./types";
 
 /** Sépare les milliers par une espace : 90000 -> "90 000". */
 export function fmt(n: number): string {
@@ -41,6 +41,30 @@ export function statusLabel(status: ListingStatus): string {
 /** Classe CSS de badge assortie au statut. */
 export function statusBadgeClass(status: ListingStatus): string {
   return STATUS_BADGE_CLASS[status];
+}
+
+const VERIFICATION_LABELS: Record<VerificationStatus, string> = {
+  non_verifie: "Identité non vérifiée",
+  en_attente: "Vérification en cours",
+  verifie: "Identité vérifiée",
+  refuse: "Vérification refusée",
+};
+
+const VERIFICATION_BADGE_CLASS: Record<VerificationStatus, string> = {
+  non_verifie: "tag tag--neutral",
+  en_attente: "tag tag--neutral",
+  verifie: "tag",
+  refuse: "tag tag--warn",
+};
+
+/** Libellé lisible du statut de vérification d'identité d'un propriétaire. */
+export function verificationLabel(status: VerificationStatus): string {
+  return VERIFICATION_LABELS[status];
+}
+
+/** Classe CSS de badge assortie au statut de vérification. */
+export function verificationBadgeClass(status: VerificationStatus): string {
+  return VERIFICATION_BADGE_CLASS[status];
 }
 
 /** "il y a 2 h", "il y a 3 jours"… à partir d'une date. */

@@ -14,6 +14,9 @@ export type ListingStatus =
   | "refusee"
   | "expiree";
 
+/** Vérification d'identité d'un compte propriétaire — faite une seule fois. */
+export type VerificationStatus = "non_verifie" | "en_attente" | "verifie" | "refuse";
+
 export interface CostRow {
   k: string;
   v: string;

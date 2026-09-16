@@ -3,8 +3,10 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { getListingStatusCounts, getPendingListings } from "@/lib/data";
+import { getPendingVerifications } from "@/lib/verification";
 import { relativeTime } from "@/lib/format";
 import ModerationActions from "@/components/ModerationActions";
+import VerificationActions from "@/components/VerificationActions";
 
 export const metadata: Metadata = {
   title: "Administration · Modération",
@@ -38,12 +40,16 @@ export default async function AdminPage() {
     );
   }
 
-  const [pending, counts] = await Promise.all([getPendingListings(), getListingStatusCounts()]);
+  const [pending, counts, pendingVerifications] = await Promise.all([
+    getPendingListings(),
+    getListingStatusCounts(),
+    getPendingVerifications(),
+  ]);
 
   const stats = [
-    { k: "En attente", v: counts.en_attente },
+    { k: "Identités en attente", v: pendingVerifications.length },
+    { k: "Annonces en attente", v: counts.en_attente },
     { k: "En ligne", v: counts.en_ligne },
-    { k: "Correction demandée", v: counts.correction_demandee },
     { k: "Refusées", v: counts.refusee },
   ];
 
@@ -56,10 +62,10 @@ export default async function AdminPage() {
         File de validation
       </h1>
       <p style={{ margin: "0 0 32px", color: "var(--muted)", maxWidth: "60ch", lineHeight: 1.7 }}>
-        Chaque annonce est contrôlée avant publication : cohérence du loyer et de l&apos;avance,
-        qualité de la description. C&apos;est ce filtre qui tient les pratiques trompeuses hors du
-        site. (Le contrôle de la pièce d&apos;identité et du titre de propriété arrivera avec
-        l&apos;upload de documents, à une étape suivante.)
+        L&apos;identité d&apos;un propriétaire se vérifie une seule fois, avant sa première
+        annonce. Chaque annonce, elle, est contrôlée individuellement : cohérence du loyer et
+        de l&apos;avance, qualité de la description. C&apos;est ce double filtre qui tient les
+        pratiques trompeuses hors du site.
       </p>
 
       <div className="kpi-band" style={{ marginBottom: 38 }}>
@@ -71,6 +77,51 @@ export default async function AdminPage() {
         ))}
       </div>
 
+      <h2
+        className="h-serif h-serif--26"
+        style={{ borderBottom: "1px solid var(--hair)", paddingBottom: 10, marginBottom: 22 }}
+      >
+        Vérifications d&apos;identité en attente
+      </h2>
+      {pendingVerifications.length === 0 ? (
+        <p className="muted" style={{ padding: "0 0 24px" }}>
+          Aucune vérification en attente.
+        </p>
+      ) : (
+        <div style={{ marginBottom: 8 }}>
+          {pendingVerifications.map((v) => (
+            <article className="mod-card" key={v.id}>
+              <div className="mod-card__body">
+                <p className="mod-card__ref">déposée {relativeTime(v.createdAt)}</p>
+                <h2 className="mod-card__title">{v.name || v.email}</h2>
+                <p className="mod-card__line">{v.email}</p>
+                <div className="mod-card__badges">
+                  {v.identityDocUrl ? (
+                    <a
+                      className="tag"
+                      href={`/api/admin/identity-doc/${v.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Voir le document ↗
+                    </a>
+                  ) : (
+                    <span className="tag tag--warn">Aucun document</span>
+                  )}
+                </div>
+              </div>
+              <VerificationActions userId={v.id} />
+            </article>
+          ))}
+        </div>
+      )}
+
+      <h2
+        className="h-serif h-serif--26"
+        style={{ margin: "40px 0 22px", borderBottom: "1px solid var(--hair)", paddingBottom: 10 }}
+      >
+        Annonces en attente
+      </h2>
       {pending.length === 0 ? (
         <p className="muted" style={{ padding: "24px 0" }}>
           Aucune annonce en attente pour le moment.

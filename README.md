@@ -134,19 +134,24 @@ mon-appart/
    │  │  └─ verification/page.tsx  « Vérifiez votre boîte mail »
    │  ├─ api/
    │  │  ├─ auth/[...nextauth]/route.ts  Routes de next-auth (ne pas modifier)
-   │  │  └─ upload/route.ts      Délivre un jeton d'upload Vercel Blob (connexion requise)
+   │  │  ├─ upload/route.ts      Jeton d'upload Vercel Blob — photos (store public)
+   │  │  ├─ upload-identity/route.ts  Jeton d'upload Vercel Blob — pièce d'identité (store privé)
+   │  │  └─ admin/identity-doc/[userId]/route.ts  Relaie un document privé à l'admin
    │  ├─ annonces/
    │  │  ├─ page.tsx             Liste + filtres    → /annonces (annonces "en_ligne" uniquement)
    │  │  └─ [ref]/
    │  │     ├─ page.tsx          Fiche d'un bien    → /annonces/MA-1042
    │  │     └─ visite/page.tsx   Prise de rendez-vous → /annonces/MA-1042/visite
+   │  ├─ verification-identite/
+   │  │  ├─ page.tsx             Statut + envoi de la pièce d'identité → /verification-identite
+   │  │  └─ actions.ts           Action serveur submitVerification()
    │  ├─ publier/
-   │  │  ├─ page.tsx             Assistant propriétaire (connexion requise) → /publier
+   │  │  ├─ page.tsx             Assistant propriétaire (identité vérifiée requise) → /publier
    │  │  └─ actions.ts           Action serveur publishListing() — écrit en base
    │  ├─ espace-proprietaire/page.tsx  Mes annonces + leur statut → /espace-proprietaire
    │  └─ admin/
-   │     ├─ page.tsx             File de modération (rôle admin requis) → /admin
-   │     └─ actions.ts           Action serveur moderateListing() — change le statut
+   │     ├─ page.tsx             Modération : identités + annonces (rôle admin requis) → /admin
+   │     └─ actions.ts           moderateListing() / moderateVerification() — changent le statut
    │
    ├─ components/         Morceaux d'interface réutilisables
    │  ├─ SiteHeader.tsx / Nav.tsx / SiteFooter.tsx
@@ -155,23 +160,27 @@ mon-appart/
    │  ├─ ListingCard.tsx / Faq.tsx
    │  ├─ ListingPhoto.tsx        Vraie photo (URL) ou vignette de démonstration
    │  ├─ PhotoUploadSlot.tsx     Envoie une photo vers Vercel Blob (formulaire /publier)
+   │  ├─ VerificationDocUpload.tsx  Envoie la pièce d'identité (store privé)
+   │  ├─ VerificationForm.tsx    Formulaire de /verification-identite
    │  ├─ AnnoncesBrowser.tsx     Filtres de recherche (interactif)
    │  ├─ VisiteForm.tsx          Choix du créneau + formulaire
-   │  ├─ PublierWizard.tsx       Assistant 3 étapes
+   │  ├─ PublierWizard.tsx       Assistant 2 étapes
    │  ├─ NewsletterForm.tsx      Alerte SMS
    │  ├─ ConfirmButton.tsx       Bouton « Confirmer » (espace propriétaire)
-   │  └─ ModerationActions.tsx   Boutons Valider / Refuser (admin)
+   │  ├─ ModerationActions.tsx   Boutons Valider / Refuser une annonce (admin)
+   │  └─ VerificationActions.tsx Boutons Valider / Refuser une identité (admin)
    │
    ├─ lib/                Code non visuel
    │  ├─ types.ts          Formes des données (Listing, City…)
    │  ├─ format.ts         fcfa(), fmt() — mise en forme des montants
    │  ├─ db.ts             L'instance unique de connexion à la base (Prisma)
    │  ├─ data.ts           Lecture des annonces en base + contenus éditoriaux
+   │  ├─ verification.ts   Lecture/écriture du statut de vérification d'un compte
    │  ├─ auth.ts           Configuration next-auth (fournisseur, sessions, rôles)
    │  └─ mail.ts           Envoi de l'email de connexion (Resend, ou console)
    │
    └─ types/
-      └─ next-auth.d.ts    Ajoute id/role aux types de session next-auth
+      └─ next-auth.d.ts    Ajoute id/role/verificationStatus aux types de session
 ```
 
 ### Composant « serveur » ou « client » ?
@@ -256,9 +265,11 @@ en_attente  →  en_ligne              (visible sur /annonces et sa fiche)
 - `/espace-proprietaire` affiche les vraies annonces du compte connecté
   (`getListingsByOwner()`), avec leur statut
 
-Pas encore réel : le contrôle des documents (pièce d'identité, titre de
-propriété) et le paiement de la commission (publication gratuite tant que
-Mobile Money n'est pas branché).
+Depuis peu, `/publier` suppose l'identité du propriétaire déjà vérifiée (voir
+§ 11) : le formulaire ne s'occupe plus que du bien lui-même, en 2 étapes.
+
+Pas encore réel : le paiement de la commission (publication gratuite tant
+que Mobile Money n'est pas branché).
 
 ---
 
@@ -289,24 +300,59 @@ destinées à être vues publiquement).
 
 ---
 
-## 11. Ce qui n'est PAS encore branché
+## 11. Vérification d'identité (une seule fois par compte)
+
+L'identité d'un propriétaire se vérifie **une seule fois**, avant sa
+première annonce — pas à chaque publication. Séparé de `Listing.status` :
+c'est `User.verificationStatus` (`prisma/schema.prisma`) qui porte cet état.
+
+```
+non_verifie  →  en_attente  →  verifie   (peut publier, définitivement)
+                            →  refuse    (peut réessayer, voir la raison)
+```
+
+- `/verification-identite` (connexion requise) : envoie une pièce d'identité
+  et passe le compte en `en_attente` (`submitVerification()`,
+  `src/app/verification-identite/actions.ts`)
+- `/publier` vérifie `session.user.verificationStatus` **avant** d'afficher
+  le formulaire : redirige vers `/verification-identite` si ce n'est pas
+  encore `"verifie"` — voir `src/app/publier/page.tsx`
+- `/admin` liste les vérifications en attente (`getPendingVerifications()`,
+  `src/lib/verification.ts`) ; Valider / Refuser appellent
+  `moderateVerification()` (`src/app/admin/actions.ts`)
+- Le document est stocké dans un store Blob **PRIVÉ**, distinct de celui des
+  photos (`BLOB_PRIVATE_READ_WRITE_TOKEN`, upload via
+  `src/app/api/upload-identity/route.ts`). L'admin le consulte via
+  `/api/admin/identity-doc/[userId]`, qui relaie le fichier après avoir
+  vérifié le rôle — jamais d'URL Blob privée exposée directement
+- Sessions stockées en base (voir § 8) : dès qu'un admin valide, le compte
+  peut publier à la requête suivante, sans reconnexion
+
+Sans `BLOB_PRIVATE_READ_WRITE_TOKEN`, l'envoi du document échoue proprement
+(message clair, pas de plantage) — la vérification reste indisponible tant
+que ce jeton n'est pas renseigné.
+
+---
+
+## 12. Ce qui n'est PAS encore branché
 
 | Action | État actuel | Étape suivante |
 |---|---|---|
 | Recherche / filtres | ✅ lit la base de données | — |
 | Fiche d'un bien | ✅ lit la base de données | — |
 | Connexion (lien magique) | ✅ fonctionne, rôles proprietaire/admin | — |
-| Publier un bien | ✅ enregistré en base, file de modération réelle | — |
-| Photos | ✅ vrai upload (Vercel Blob) | documents d'identité / titre de propriété |
+| Vérification d'identité | ✅ workflow complet, une fois par compte | envoi réel du document (store privé à créer) |
+| Publier un bien | ✅ enregistré en base, 2 étapes, file de modération réelle | — |
+| Photos | ✅ vrai upload (Vercel Blob) | — |
 | Espace propriétaire | ✅ vraies annonces du compte connecté | demandes de visite réelles |
-| Admin | ✅ vraie file de modération | contrôle de documents (pièce d'identité, titre) |
+| Admin | ✅ vraie file de modération (annonces + identités) | — |
 | Demande de visite | affiche un message, rien n'est envoyé | enregistrement + email au propriétaire |
 | Alerte SMS | idem | route API + service de SMS/email |
 | Paiement de la commission | publication gratuite pour l'instant | intégration MTN MoMo / Moov Money |
 
 ---
 
-## 12. Commandes utiles
+## 13. Commandes utiles
 
 | Commande | Effet |
 |---|---|

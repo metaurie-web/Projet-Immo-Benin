@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { getListingsByOwner } from "@/lib/data";
-import { fcfa, statusBadgeClass, statusLabel } from "@/lib/format";
+import { fcfa, statusBadgeClass, statusLabel, verificationBadgeClass, verificationLabel } from "@/lib/format";
 import ConfirmButton from "@/components/ConfirmButton";
 
 export const metadata: Metadata = {
@@ -69,6 +69,15 @@ export default async function EspaceProprietairePage() {
           <h1 className="display" style={{ fontSize: "clamp(30px, 3.6vw, 44px)" }}>
             Bonjour, {session.user.name || session.user.email}
           </h1>
+          <p style={{ marginTop: 10 }}>
+            <Link
+              href="/verification-identite"
+              className={verificationBadgeClass(session.user.verificationStatus)}
+              style={{ textDecoration: "none" }}
+            >
+              {verificationLabel(session.user.verificationStatus)}
+            </Link>
+          </p>
         </div>
         <Link className="btn" href="/publier">
           Publier un nouveau bien

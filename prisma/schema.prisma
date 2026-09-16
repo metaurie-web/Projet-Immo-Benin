@@ -98,6 +98,15 @@ model User {
   /// "proprietaire" (par défaut) ou "admin".
   role          String    @default("proprietaire")
 
+  /// Vérification d'identité du propriétaire — faite UNE SEULE FOIS par
+  /// compte, avant sa première publication. "non_verifie" (par défaut) |
+  /// "en_attente" | "verifie" | "refuse". Une fois "verifie", il n'a plus
+  /// besoin de repasser par là pour publier d'autres annonces.
+  verificationStatus String    @default("non_verifie")
+  identityDocUrl      String? // pièce d'identité, stockée dans un store Blob PRIVÉ
+  verificationNote    String? // raison d'un refus, visible au propriétaire
+  verifiedAt          DateTime?
+
   accounts      Account[]
   sessions      Session[]
   listings      Listing[]

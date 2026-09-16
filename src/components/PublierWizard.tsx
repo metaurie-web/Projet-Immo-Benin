@@ -9,17 +9,19 @@ import PhotoUploadSlot from "@/components/PhotoUploadSlot";
 
 const PHOTO_LABELS = ["Façade", "Séjour", "Chambre", "Cuisine et douche"] as const;
 
-/* Assistant de publication en 3 étapes.
-   Les informations sont réellement enregistrées en base (étape 3, bouton
+/* Assistant de publication en 2 étapes.
+   L'identité du propriétaire se vérifie une seule fois, séparément (voir
+   /verification-identite) — /publier lui-même la suppose déjà acquise, donc
+   ce formulaire ne s'occupe plus que du bien à publier.
+   Les informations sont réellement enregistrées en base (étape 2, bouton
    « Publier mon annonce ») : l'annonce part avec le statut « en attente »
    et n'apparaît publiquement qu'une fois validée depuis /admin.
-   Restent à brancher : upload des vraies photos/documents, et le paiement
-   Mobile Money de la commission — la publication est gratuite en attendant. */
+   Reste à brancher : le paiement Mobile Money de la commission — la
+   publication est gratuite en attendant. */
 
 const STEPS = [
   { n: 1, label: "Informations et photos" },
-  { n: 2, label: "Vérification" },
-  { n: 3, label: "Publication" },
+  { n: 2, label: "Publication" },
 ];
 
 const CITIES = ["Cotonou", "Abomey-Calavi", "Porto-Novo", "Ouidah"] as const;
@@ -62,7 +64,7 @@ export default function PublierWizard() {
   }
 
   const go = (n: number) => {
-    setStep(Math.min(3, Math.max(1, n)));
+    setStep(Math.min(2, Math.max(1, n)));
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -91,7 +93,7 @@ export default function PublierWizard() {
         className="display"
         style={{ fontSize: "clamp(30px, 3.8vw, 46px)", maxWidth: "26ch", marginBottom: 34 }}
       >
-        Publiez votre bien en trois étapes.
+        Publiez votre bien en deux étapes.
       </h1>
 
       <ol className="wizard-steps">
@@ -330,66 +332,14 @@ export default function PublierWizard() {
 
           <div className="form-grid__full" style={{ display: "flex", justifyContent: "flex-end" }}>
             <button className="btn" type="submit">
-              Continuer vers la vérification
+              Continuer vers la publication
             </button>
           </div>
         </form>
       )}
 
-      {/* Étape 2 — vérification (documents à venir) */}
+      {/* Étape 2 — récapitulatif + publication réelle */}
       {step === 2 && (
-        <div style={{ maxWidth: 760 }}>
-          <p className="prose" style={{ maxWidth: "none", marginBottom: 24 }}>
-            Nous vérifions chaque propriétaire avant de publier son annonce. C&apos;est ce
-            qui permet aux locataires de faire confiance à la plateforme et de ne plus
-            passer par un démarcheur. Vos documents ne sont jamais visibles publiquement.
-          </p>
-          <div
-            className="form-grid"
-            style={{
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-              marginBottom: 18,
-            }}
-          >
-            <div className="doc-card">
-              <p className="doc-card__title">Pièce d&apos;identité</p>
-              <p className="doc-card__body">
-                CIP, passeport ou carte d&apos;identité en cours de validité, au nom du
-                propriétaire.
-              </p>
-              <span className="eyebrow eyebrow--muted" style={{ color: "var(--deep)" }}>
-                + Joindre un fichier
-              </span>
-            </div>
-            <div className="doc-card">
-              <p className="doc-card__title">Titre de propriété</p>
-              <p className="doc-card__body">
-                Attestation de recasement, convention de vente ou titre foncier du bien mis
-                en location.
-              </p>
-              <span className="eyebrow eyebrow--muted" style={{ color: "var(--deep)" }}>
-                + Joindre un fichier
-              </span>
-            </div>
-          </div>
-          <p className="notice" style={{ marginBottom: 26 }}>
-            L&apos;envoi de documents arrive avec l&apos;upload de photos, à l&apos;étape
-            suivante. Pour l&apos;instant, la vérification se fait manuellement par notre
-            équipe après réception de ton annonce.
-          </p>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-            <button className="link-underline" type="button" onClick={() => go(1)}>
-              ← Revenir aux informations
-            </button>
-            <button className="btn" type="button" onClick={() => go(3)}>
-              Continuer vers la publication
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Étape 3 — récapitulatif + publication réelle */}
-      {step === 3 && (
         <div className="wrap-flex" style={{ gap: 38 }}>
           <div className="grow">
             <p className="prose" style={{ maxWidth: "56ch", marginBottom: 16 }}>
@@ -416,8 +366,8 @@ export default function PublierWizard() {
               </p>
             ) : (
               <div style={{ display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
-                <button className="link-underline" type="button" onClick={() => go(2)}>
-                  ← Revenir à la vérification
+                <button className="link-underline" type="button" onClick={() => go(1)}>
+                  ← Revenir aux informations
                 </button>
                 <button className="btn" type="button" onClick={handlePublish} disabled={submitting}>
                   {submitting ? "Publication…" : "Publier mon annonce"}
