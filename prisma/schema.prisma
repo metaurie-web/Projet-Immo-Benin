@@ -68,3 +68,68 @@ model Review {
 
   createdAt  DateTime @default(now())
 }
+
+/* ------------------------------------------------------------------ */
+/*  Authentification (Auth.js / next-auth, connexion par lien magique)  */
+/*  Ces 4 modèles suivent le format attendu par @auth/prisma-adapter :  */
+/*  https://authjs.dev/getting-started/adapters/prisma                 */
+/* ------------------------------------------------------------------ */
+
+/// Un utilisateur du site (propriétaire ou administrateur).
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+
+  /// "proprietaire" (par défaut) ou "admin".
+  role          String    @default("proprietaire")
+
+  accounts      Account[]
+  sessions      Session[]
+
+  createdAt     DateTime  @default(now())
+}
+
+/// Compte de connexion externe (non utilisé pour l'instant : on ne se
+/// connecte que par lien magique — ce modèle prépare une future connexion
+/// Google/Facebook si on en a besoin un jour).
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+/// Une session active (créée après un clic sur le lien magique).
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Le code envoyé par email lors d'une connexion par lien magique.
+/// Une ligne est créée à l'envoi, supprimée dès qu'elle est utilisée (ou expirée).
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}

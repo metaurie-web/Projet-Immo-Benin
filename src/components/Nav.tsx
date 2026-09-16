@@ -3,19 +3,21 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 
-/* « use client » : ce composant a besoin d'état (menu ouvert/fermé) et de
-   savoir sur quelle page on est. Il tourne donc dans le navigateur. */
+/* « use client » : ce composant a besoin d'état (menu ouvert/fermé), de
+   savoir sur quelle page on est, et de la session de connexion. Il tourne
+   donc dans le navigateur. */
 
 const LINKS = [
   { href: "/", label: "Accueil" },
   { href: "/annonces", label: "Annonces" },
   { href: "/publier", label: "Publier un bien" },
 ];
-const RIGHT = { href: "/espace-proprietaire", label: "Espace propriétaire" };
 
 export default function Nav() {
   const pathname = usePathname();
+  const { data: session, status } = useSession();
   const [open, setOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -48,28 +50,43 @@ export default function Nav() {
       >
         Menu
       </button>
-      <nav
-        className="nav"
-        id="site-nav"
-        aria-label="Navigation principale"
-        hidden={navHidden}
-      >
+      <nav className="nav" id="site-nav" aria-label="Navigation principale" hidden={navHidden}>
         {LINKS.map((l) => (
-          <Link
-            key={l.href}
-            href={l.href}
-            aria-current={isActive(l.href) ? "page" : undefined}
-          >
+          <Link key={l.href} href={l.href} aria-current={isActive(l.href) ? "page" : undefined}>
             {l.label}
           </Link>
         ))}
         <span className="nav__sep" aria-hidden="true" />
+
         <Link
-          href={RIGHT.href}
-          aria-current={isActive(RIGHT.href) ? "page" : undefined}
+          href="/espace-proprietaire"
+          aria-current={isActive("/espace-proprietaire") ? "page" : undefined}
         >
-          {RIGHT.label}
+          Espace propriétaire
         </Link>
+
+        {session?.user.role === "admin" && (
+          <Link href="/admin" aria-current={isActive("/admin") ? "page" : undefined}>
+            Admin
+          </Link>
+        )}
+
+        {status === "authenticated" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 13px" }}>
+            <span style={{ fontSize: 13, color: "var(--grey)" }}>{session.user.email}</span>
+            <button
+              type="button"
+              className="link-underline"
+              onClick={() => signOut({ callbackUrl: "/" })}
+            >
+              Se déconnecter
+            </button>
+          </div>
+        ) : status === "unauthenticated" ? (
+          <Link href="/connexion" aria-current={isActive("/connexion") ? "page" : undefined}>
+            Connexion
+          </Link>
+        ) : null /* "loading" : on n'affiche rien pour éviter un clignotement */}
       </nav>
     </>
   );

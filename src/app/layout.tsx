@@ -3,6 +3,7 @@ import { Cormorant_Garamond, Lora } from "next/font/google";
 import "./globals.css";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
+import AuthProvider from "@/components/AuthProvider";
 
 /* next/font télécharge et héberge les polices avec le site (pas d'appel à
    Google au chargement de la page). Chaque police expose une variable CSS
@@ -39,14 +40,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr" className={`${display.variable} ${body.variable}`}>
       <body>
-        <a className="skip-link" href="#main">
-          Aller au contenu
-        </a>
-        <SiteHeader />
-        <main id="main" className="page-foot-space">
-          {children}
-        </main>
-        <SiteFooter />
+        <AuthProvider>
+          <a className="skip-link" href="#main">
+            Aller au contenu
+          </a>
+          <SiteHeader />
+          <main id="main" className="page-foot-space">
+            {children}
+          </main>
+          <SiteFooter />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -1,4 +1,7 @@
 import type { Metadata } from "next";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
 import ModerationActions from "@/components/ModerationActions";
 
 export const metadata: Metadata = {
@@ -63,7 +66,28 @@ const PENDING: {
   },
 ];
 
-export default function AdminPage() {
+export default async function AdminPage() {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/connexion?callbackUrl=/admin");
+
+  if (session.user.role !== "admin") {
+    return (
+      <section className="wrap section">
+        <div className="panel" style={{ maxWidth: 560 }}>
+          <p className="eyebrow eyebrow--muted" style={{ marginBottom: 10 }}>
+            Accès refusé
+          </p>
+          <p style={{ margin: 0, color: "var(--muted)", lineHeight: 1.7 }}>
+            Cette page est réservée aux administrateurs. Le compte{" "}
+            <strong>{session.user.email}</strong> est connecté avec le rôle «&nbsp;{session.user.role}
+            &nbsp;». Si tu penses que c&apos;est une erreur, promeus ce compte avec{" "}
+            <code>npm run make-admin -- {session.user.email}</code>.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="wrap section">
       <p className="eyebrow" style={{ marginBottom: 8 }}>

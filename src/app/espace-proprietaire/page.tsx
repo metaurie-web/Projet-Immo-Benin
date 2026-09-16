@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/auth";
 import ConfirmButton from "@/components/ConfirmButton";
 
 export const metadata: Metadata = {
@@ -38,7 +41,10 @@ const OWNER_SLOTS = [
   "Mer. 16 sept. 08h00",
 ];
 
-export default function EspaceProprietairePage() {
+export default async function EspaceProprietairePage() {
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/connexion?callbackUrl=/espace-proprietaire");
+
   return (
     <section className="wrap section">
       <div
@@ -56,8 +62,13 @@ export default function EspaceProprietairePage() {
             Espace propriétaire
           </p>
           <h1 className="display" style={{ fontSize: "clamp(30px, 3.6vw, 44px)" }}>
-            Bonjour, M. Adjovi Kossi
+            Bonjour, {session.user.name || session.user.email}
           </h1>
+          <p style={{ marginTop: 8, fontSize: 13.5, color: "var(--grey)" }}>
+            Les annonces et demandes ci-dessous sont encore des données de démonstration — la
+            prochaine étape les remplacera par les vraies données de{" "}
+            <strong>{session.user.email}</strong>.
+          </p>
         </div>
         <Link className="btn" href="/publier">
           Publier un nouveau bien
