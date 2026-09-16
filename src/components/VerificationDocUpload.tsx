@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { upload } from "@vercel/blob/client";
+import { uploadIdentityDoc } from "@/app/verification-identite/actions";
 
 /* Envoi de la pièce d'identité (formulaire /verification-identite).
-   Comme PhotoUploadSlot, le fichier part directement du navigateur vers
-   Vercel Blob — mais ici vers le store PRIVÉ (/api/upload-identity), et le
-   document n'est jamais affiché tel quel (voir /api/admin/identity-doc). */
+   Contrairement aux photos (store public, upload direct navigateur → Blob),
+   le document passe par une action serveur — seule détentrice du jeton
+   Blob PRIVÉ — plutôt qu'un upload direct depuis le navigateur. */
 export default function VerificationDocUpload({
   value,
   onChange,
@@ -26,12 +26,15 @@ export default function VerificationDocUpload({
     setError(null);
     setUploading(true);
     try {
-      const blob = await upload(`identite/${Date.now()}-${file.name}`, file, {
-        access: "public", // ignoré : le store cible (privé) impose son propre mode
-        handleUploadUrl: "/api/upload-identity",
-      });
+      const formData = new FormData();
+      formData.append("file", file);
+      const result = await uploadIdentityDoc(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       setFileName(file.name);
-      onChange(blob.url, file.name);
+      onChange(result.url, file.name);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Échec de l'envoi.");
     } finally {

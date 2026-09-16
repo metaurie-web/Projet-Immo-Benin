@@ -135,7 +135,6 @@ mon-appart/
    │  ├─ api/
    │  │  ├─ auth/[...nextauth]/route.ts  Routes de next-auth (ne pas modifier)
    │  │  ├─ upload/route.ts      Jeton d'upload Vercel Blob — photos (store public)
-   │  │  ├─ upload-identity/route.ts  Jeton d'upload Vercel Blob — pièce d'identité (store privé)
    │  │  └─ admin/identity-doc/[userId]/route.ts  Relaie un document privé à l'admin
    │  ├─ annonces/
    │  │  ├─ page.tsx             Liste + filtres    → /annonces (annonces "en_ligne" uniquement)
@@ -144,7 +143,7 @@ mon-appart/
    │  │     └─ visite/page.tsx   Prise de rendez-vous → /annonces/MA-1042/visite
    │  ├─ verification-identite/
    │  │  ├─ page.tsx             Statut + envoi de la pièce d'identité → /verification-identite
-   │  │  └─ actions.ts           Action serveur submitVerification()
+   │  │  └─ actions.ts           uploadIdentityDoc() + submitVerification()
    │  ├─ publier/
    │  │  ├─ page.tsx             Assistant propriétaire (identité vérifiée requise) → /publier
    │  │  └─ actions.ts           Action serveur publishListing() — écrit en base
@@ -321,10 +320,13 @@ non_verifie  →  en_attente  →  verifie   (peut publier, définitivement)
   `src/lib/verification.ts`) ; Valider / Refuser appellent
   `moderateVerification()` (`src/app/admin/actions.ts`)
 - Le document est stocké dans un store Blob **PRIVÉ**, distinct de celui des
-  photos (`BLOB_PRIVATE_READ_WRITE_TOKEN`, upload via
-  `src/app/api/upload-identity/route.ts`). L'admin le consulte via
-  `/api/admin/identity-doc/[userId]`, qui relaie le fichier après avoir
-  vérifié le rôle — jamais d'URL Blob privée exposée directement
+  photos (`BLOB_PRIVATE_READ_WRITE_TOKEN`). Contrairement aux photos (store
+  public, upload direct navigateur → Blob), un store privé n'accepte pas
+  cette voie : le fichier transite par une **action serveur**
+  (`uploadIdentityDoc()`, `src/app/verification-identite/actions.ts`), la
+  seule à détenir le jeton privé. L'admin consulte le document via
+  `/api/admin/identity-doc/[userId]`, qui le relaie après avoir vérifié le
+  rôle — jamais d'URL Blob privée exposée directement
 - Sessions stockées en base (voir § 8) : dès qu'un admin valide, le compte
   peut publier à la requête suivante, sans reconnexion
 
@@ -341,7 +343,7 @@ que ce jeton n'est pas renseigné.
 | Recherche / filtres | ✅ lit la base de données | — |
 | Fiche d'un bien | ✅ lit la base de données | — |
 | Connexion (lien magique) | ✅ fonctionne, rôles proprietaire/admin | — |
-| Vérification d'identité | ✅ workflow complet, une fois par compte | envoi réel du document (store privé à créer) |
+| Vérification d'identité | ✅ complet, une fois par compte, vrai document privé | — |
 | Publier un bien | ✅ enregistré en base, 2 étapes, file de modération réelle | — |
 | Photos | ✅ vrai upload (Vercel Blob) | — |
 | Espace propriétaire | ✅ vraies annonces du compte connecté | demandes de visite réelles |

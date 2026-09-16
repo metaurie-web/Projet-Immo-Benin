@@ -10,6 +10,15 @@ const nextConfig = {
       },
     ],
   },
+  experimental: {
+    serverActions: {
+      // Les pièces d'identité passent par une action serveur (pas d'upload
+      // direct navigateur → Blob pour le store PRIVÉ, voir
+      // src/app/verification-identite/actions.ts) : il faut de la marge
+      // au-delà de la limite par défaut (1 Mo).
+      bodySizeLimit: "10mb",
+    },
+  },
 };
 
 export default nextConfig;
