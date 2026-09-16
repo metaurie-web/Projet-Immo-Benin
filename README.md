@@ -134,13 +134,17 @@ mon-appart/
    │  │  └─ verification/page.tsx  « Vérifiez votre boîte mail »
    │  ├─ api/auth/[...nextauth]/route.ts  Routes de next-auth (ne pas modifier)
    │  ├─ annonces/
-   │  │  ├─ page.tsx             Liste + filtres    → /annonces
+   │  │  ├─ page.tsx             Liste + filtres    → /annonces (annonces "en_ligne" uniquement)
    │  │  └─ [ref]/
    │  │     ├─ page.tsx          Fiche d'un bien    → /annonces/MA-1042
    │  │     └─ visite/page.tsx   Prise de rendez-vous → /annonces/MA-1042/visite
-   │  ├─ publier/page.tsx        Assistant propriétaire → /publier
-   │  ├─ espace-proprietaire/page.tsx  Tableau de bord (connexion requise) → /espace-proprietaire
-   │  └─ admin/page.tsx          File de modération (rôle admin requis) → /admin
+   │  ├─ publier/
+   │  │  ├─ page.tsx             Assistant propriétaire (connexion requise) → /publier
+   │  │  └─ actions.ts           Action serveur publishListing() — écrit en base
+   │  ├─ espace-proprietaire/page.tsx  Mes annonces + leur statut → /espace-proprietaire
+   │  └─ admin/
+   │     ├─ page.tsx             File de modération (rôle admin requis) → /admin
+   │     └─ actions.ts           Action serveur moderateListing() — change le statut
    │
    ├─ components/         Morceaux d'interface réutilisables
    │  ├─ SiteHeader.tsx / Nav.tsx / SiteFooter.tsx
@@ -197,9 +201,8 @@ Aujourd'hui, **les annonces viennent de la base**. Les fonctions
 `src/lib/data.ts` font une requête Prisma (elles sont donc `async` — les pages
 les « attendent » avec `await`).
 
-Restent écrits en dur, pour l'instant : les villes, la FAQ, les témoignages,
-les créneaux de visite (`src/lib/data.ts`) et les données des pages
-**espace propriétaire** et **admin**.
+Restent écrits en dur, pour l'instant : les villes, la FAQ, les témoignages
+et les créneaux de visite (`src/lib/data.ts`).
 
 ---
 
@@ -225,22 +228,53 @@ champ à sécuriser nous-mêmes.
 
 ---
 
-## 9. Ce qui n'est PAS encore branché
+## 9. Publier un bien et la modération
+
+Le cycle de vie d'une annonce (`Listing.status`, dans `prisma/schema.prisma`) :
+
+```
+en_attente  →  en_ligne              (visible sur /annonces et sa fiche)
+            →  correction_demandee   (l'admin demande une modification)
+            →  refusee
+```
+
+- `/publier` (connexion requise) : le formulaire enregistre une vraie annonce
+  via l'action serveur `publishListing()` (`src/app/publier/actions.ts`),
+  validée avec **zod**. Elle part avec le statut `en_attente` et est liée au
+  compte connecté (`ownerId`)
+- `/admin` (rôle `admin` requis) lit la vraie file d'attente
+  (`getPendingListings()`) ; les boutons Valider / Demander une correction /
+  Refuser appellent `moderateListing()` (`src/app/admin/actions.ts`) qui
+  change le statut en base
+- `getAllListings()`, `getFeaturedListings()` et `getListing()` ne renvoient
+  que les annonces `en_ligne` : c'est ce qui rend une annonce invisible du
+  public tant qu'elle n'est pas validée
+- `/espace-proprietaire` affiche les vraies annonces du compte connecté
+  (`getListingsByOwner()`), avec leur statut
+
+Pas encore réel : l'upload des photos (vignettes de démonstration en
+attendant) et le paiement de la commission (publication gratuite tant que
+Mobile Money n'est pas branché).
+
+---
+
+## 10. Ce qui n'est PAS encore branché
 
 | Action | État actuel | Étape suivante |
 |---|---|---|
 | Recherche / filtres | ✅ lit la base de données | — |
 | Fiche d'un bien | ✅ lit la base de données | — |
 | Connexion (lien magique) | ✅ fonctionne, rôles proprietaire/admin | — |
+| Publier un bien | ✅ enregistré en base, file de modération réelle | upload des vraies photos |
+| Espace propriétaire | ✅ vraies annonces du compte connecté | demandes de visite réelles |
+| Admin | ✅ vraie file de modération | contrôle de documents (pièce d'identité, titre) |
 | Demande de visite | affiche un message, rien n'est envoyé | enregistrement + email au propriétaire |
 | Alerte SMS | idem | route API + service de SMS/email |
-| Publier un bien | assistant complet, rien n'est enregistré | enregistrement lié au compte + upload photos |
-| Paiement de la commission | bouton « simulé » | intégration MTN MoMo / Moov Money |
-| Espace propriétaire / Admin | connexion protégée, mais données encore écrites en dur | brancher à la base, filtrées par compte |
+| Paiement de la commission | publication gratuite pour l'instant | intégration MTN MoMo / Moov Money |
 
 ---
 
-## 10. Commandes utiles
+## 11. Commandes utiles
 
 | Commande | Effet |
 |---|---|
