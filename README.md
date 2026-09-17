@@ -222,7 +222,7 @@ mon-appart/
    │  ├─ users.ts          Comptes par rôle, changement de rôle (admin)
    │  ├─ settings.ts       Réglages généraux (SiteSettings)
    │  ├─ auth.ts           Configuration next-auth (fournisseur, sessions, rôles)
-   │  └─ mail.ts           Envoi de l'email de connexion (Resend, ou console)
+   │  └─ mail.ts           Envoi de l'email de connexion (Brevo, ou console)
    │
    └─ types/
       └─ next-auth.d.ts    Ajoute id/role/verificationStatus aux types de session
@@ -287,11 +287,14 @@ champ à sécuriser nous-mêmes.
 - **Pages protégées** : chacune vérifie `session.user.role` et **redirige**
   vers le bon espace si ça ne correspond pas — voir le début de chaque
   `page.tsx`
-- **Envoi de l'email** (`src/lib/mail.ts`) :
-  - sans `RESEND_API_KEY` dans `.env` → le lien s'affiche dans le terminal
+- **Envoi de l'email** (`src/lib/mail.ts`, appel direct à l'API Brevo, sans SDK) :
+  - sans `BREVO_API_KEY` dans `.env` → le lien s'affiche dans le terminal
     (`npm run dev`), pratique pour développer sans rien créer
-  - avec une clé Resend → l'email part pour de vrai. Compte gratuit sur
-    <https://resend.com>, la clé se colle dans `.env` (`RESEND_API_KEY=...`)
+  - avec une clé Brevo → l'email part pour de vrai. Compte gratuit sur
+    <https://www.brevo.com>, la clé se colle dans `.env`
+    (`BREVO_API_KEY=...`) — `EMAIL_FROM` doit être une adresse déjà
+    validée comme expéditeur dans Brevo (Senders, Domains & Dedicated IPs),
+    sinon l'envoi échoue quel que soit le destinataire
 
 ### Confirmation de l'adresse email à l'inscription
 

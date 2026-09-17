@@ -1,31 +1,24 @@
 /* Emails transactionnels du site (connexion, demandes de visite).
 
-   - Si RESEND_API_KEY est renseigné dans .env : l'email part vraiment,
-     via Resend.
-   - Sinon (cas normal en développement, tant qu'on n'a pas créé de compte
-     Resend) : un résumé s'affiche dans le terminal où tourne `npm run dev`
-     au lieu d'être vraiment envoyé — pratique pour tester sans rien créer.
+   - Si BREVO_API_KEY est renseigné dans .env : l'email part vraiment, via
+     l'API Brevo (https://api.brevo.com/v3/smtp/email — pas de SDK, un
+     simple fetch suffit).
+   - Sinon (cas normal en développement, tant qu'on n'a pas de clé Brevo) :
+     un résumé s'affiche dans le terminal où tourne `npm run dev` au lieu
+     d'être vraiment envoyé — pratique pour tester sans rien créer.
 
-   Tant qu'aucun domaine n'est vérifié sur Resend, l'adresse d'envoi par
-   défaut (`onboarding@resend.dev`, un domaine de test partagé) refuse
-   d'expédier vers qui que ce soit d'autre que le propriétaire du compte
-   Resend — Resend répond alors une erreur 403/422 au lieu d'envoyer. Sans
-   filet, ça cassait l'inscription de tout nouveau visiteur (son adresse
-   n'étant jamais celle du compte Resend). On retombe donc sur le même
-   affichage terminal que "Resend non configuré" dans ce cas précis, pour
-   que le lien magique reste testable ; les erreurs Resend qui ne sont pas
-   cette restriction de test continuent de remonter normalement. */
+   EMAIL_FROM doit être une adresse déjà validée comme expéditeur dans le
+   compte Brevo (Senders, Domains & Dedicated IPs) — sinon Brevo refuse
+   d'envoyer, quel que soit le destinataire. */
 
-import { Resend } from "resend";
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const FROM = process.env.EMAIL_FROM || "Mon Appart <no-reply@example.com>";
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-const FROM = process.env.EMAIL_FROM || "Mon Appart <onboarding@resend.dev>";
-
-function isSandboxRestriction(message: string) {
-  return (
-    message.includes("You can only send testing emails") ||
-    message.includes("Please use our testing email address")
-  );
+/** "Nom <email>" -> { name, email } ; accepte aussi une simple adresse seule. */
+function parseFrom(raw: string): { name?: string; email: string } {
+  const match = raw.match(/^(.*)<(.+)>$/);
+  if (!match) return { email: raw.trim() };
+  return { name: match[1].trim() || undefined, email: match[2].trim() };
 }
 
 async function sendEmail({
@@ -37,28 +30,35 @@ async function sendEmail({
   to: string;
   subject: string;
   html: string;
-  /** Ce qui s'affiche dans le terminal quand Resend n'est pas configuré. */
+  /** Ce qui s'affiche dans le terminal quand Brevo n'est pas configuré. */
   fallbackLines: string[];
 }) {
-  const logFallback = (reason: string) => {
+  if (!BREVO_API_KEY) {
     const line = "─".repeat(64);
     console.log(
-      `\n${line}\n[email non envoyé — ${reason}] à ${to}\nSujet : ${subject}\n${fallbackLines.join("\n")}\n${line}\n`,
+      `\n${line}\n[email non envoyé — Brevo non configuré] à ${to}\nSujet : ${subject}\n${fallbackLines.join("\n")}\n${line}\n`,
     );
-  };
-
-  if (!resend) {
-    logFallback("Resend non configuré");
     return;
   }
 
-  const { error } = await resend.emails.send({ from: FROM, to, subject, html });
-  if (error) {
-    if (isSandboxRestriction(error.message)) {
-      logFallback("domaine d'envoi non vérifié sur Resend, voir resend.com/domains");
-      return;
-    }
-    throw new Error(`Échec de l'envoi de l'email par Resend : ${error.message}`);
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": BREVO_API_KEY,
+    },
+    body: JSON.stringify({
+      sender: parseFrom(FROM),
+      to: [{ email: to }],
+      subject,
+      htmlContent: html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(`Échec de l'envoi de l'email par Brevo : ${body?.message ?? res.statusText}`);
   }
 }
 

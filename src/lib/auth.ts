@@ -37,7 +37,7 @@ export const authOptions: NextAuthOptions = {
       // Champ obligatoire pour next-auth, mais jamais utilisé : l'envoi
       // réel est entièrement délégué à sendVerificationRequest ci-dessous.
       server: { host: "localhost", port: 587, auth: { user: "", pass: "" } },
-      from: process.env.EMAIL_FROM || "Mon Appart <onboarding@resend.dev>",
+      from: process.env.EMAIL_FROM || "Mon Appart <no-reply@example.com>",
       maxAge: 24 * 60 * 60, // le lien expire après 24 heures
       sendVerificationRequest: async ({ identifier, url }) => {
         await sendMagicLinkEmail({ to: identifier, url });
