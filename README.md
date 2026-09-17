@@ -149,7 +149,8 @@ mon-appart/
    │  │  └─ verification/page.tsx  « Vérifiez votre boîte mail »
    │  ├─ inscription/
    │  │  ├─ page.tsx             Formulaire de création de compte → /inscription
-   │  │  └─ actions.ts           registerAccount() — refuse un email déjà utilisé
+   │  │  ├─ actions.ts           registerAccount() — refuse un email déjà utilisé
+   │  │  └─ bienvenue/page.tsx   Confirmation après clic sur le lien envoyé à l'inscription
    │  ├─ api/
    │  │  ├─ auth/[...nextauth]/route.ts  Routes de next-auth (ne pas modifier)
    │  │  ├─ upload/route.ts      Jeton d'upload Vercel Blob — photos (store public)
@@ -291,6 +292,37 @@ champ à sécuriser nous-mêmes.
     (`npm run dev`), pratique pour développer sans rien créer
   - avec une clé Resend → l'email part pour de vrai. Compte gratuit sur
     <https://resend.com>, la clé se colle dans `.env` (`RESEND_API_KEY=...`)
+
+### Confirmation de l'adresse email à l'inscription
+
+Pas de deuxième système de jeton : l'inscription réutilise **exactement**
+le même mécanisme "lien magique" que la connexion — un `VerificationToken`
+à usage unique (aléatoire, haché en base, expire après 24 h — voir le cœur
+de next-auth, `callback-handler.js`) — avec une seule différence, la page
+d'arrivée après le clic.
+
+- `SignUpForm.tsx` crée le compte (`User.emailVerified` reste vide à ce
+  stade) puis appelle `signIn("email", …)` avec
+  `callbackUrl: "/inscription/bienvenue?next=..."` au lieu du
+  `/mon-espace` utilisé par la connexion
+- **Tant que ce lien n'a pas été cliqué, le compte ne peut obtenir aucune
+  session** : c'est next-auth lui-même qui pose `emailVerified` au moment
+  où le jeton est validé, qu'il s'agisse d'une inscription ou d'une
+  connexion — il n'y a donc pas de garde supplémentaire à écrire ailleurs
+  dans l'app, un compte "non confirmé" n'a structurellement accès à rien
+- `/inscription/bienvenue` (connexion requise) affiche la confirmation et
+  un bouton vers `next` (la destination initialement demandée, ex.
+  reprendre une prise de rendez-vous interrompue par l'inscription)
+- **Renvoyer l'email** : bouton sur l'écran "compte créé" de
+  `SignUpForm.tsx`, qui rappelle `signIn("email", …)` — next-auth n'annule
+  pas l'ancien jeton, les deux restent valables (à usage unique chacun)
+  jusqu'à expiration
+- **Lien expiré / déjà utilisé / invalide** : redirige vers `/connexion`
+  avec `?error=Verification`, déjà géré par `SignInForm.tsx`
+  (`"Ce lien a expiré ou a déjà été utilisé. Redemandez-en un ci-dessous."`)
+  — le même écran sert donc aux deux parcours, connexion et inscription
+- **Email déjà enregistré** : refusé par `registerAccount()`
+  (`src/app/inscription/actions.ts`), avant même l'envoi d'un lien
 
 ---
 

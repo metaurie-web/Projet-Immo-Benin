@@ -18,6 +18,19 @@ export default function SignUpForm({
   const [error, setError] = useState<string | null>(null);
   const [alreadyExists, setAlreadyExists] = useState(false);
   const [done, setDone] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resent, setResent] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
+
+  // Après validation du lien envoyé ci-dessous, l'utilisateur atterrit sur
+  // /inscription/bienvenue (email confirmé) plutôt que directement dans son
+  // espace — `next` porte la destination initialement demandée (ex. revenir
+  // finir une prise de rendez-vous), gardée pour après ce passage.
+  const verifyCallbackUrl = `/inscription/bienvenue?next=${encodeURIComponent(callbackUrl || "/mon-espace")}`;
+
+  async function sendVerificationLink() {
+    return signIn("email", { email, redirect: false, callbackUrl: verifyCallbackUrl });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -33,14 +46,14 @@ export default function SignUpForm({
       return;
     }
 
-    // Le compte existe désormais : on envoie le lien de connexion, comme
-    // sur /connexion, mais sans quitter la page pour afficher un message
-    // de bienvenue plutôt que le générique "vérifiez votre boîte mail".
-    const signInResult = await signIn("email", {
-      email,
-      redirect: false,
-      callbackUrl: callbackUrl || "/mon-espace",
-    });
+    // Le compte existe désormais, mais son adresse n'est pas encore
+    // confirmée (User.emailVerified reste vide) : on envoie le même lien
+    // "email" que /connexion, sans quitter la page, pour afficher un
+    // message de bienvenue plutôt que le générique "vérifiez votre boîte
+    // mail". C'est en cliquant ce lien que emailVerified est posé (next-auth
+    // le fait automatiquement, voir callback-handler.js) — tant que ça
+    // n'est pas fait, ce compte ne peut obtenir aucune session.
+    const signInResult = await sendVerificationLink();
     setSending(false);
 
     if (signInResult?.error) {
@@ -52,12 +65,47 @@ export default function SignUpForm({
     setDone(true);
   }
 
+  async function handleResend() {
+    setResending(true);
+    setResendError(null);
+    const result = await sendVerificationLink();
+    setResending(false);
+    if (result?.error) {
+      setResendError("L'envoi a échoué. Réessaie dans un instant.");
+      return;
+    }
+    setResent(true);
+  }
+
   if (done) {
     return (
-      <p className="notice">
-        Compte créé pour <strong>{email}</strong>. Vérifie ta boîte mail pour activer ton
-        compte et te connecter — le lien est valable 24 heures et ne sert qu&apos;une fois.
-      </p>
+      <div>
+        <p className="notice">
+          Un email de validation vient d&apos;être envoyé à <strong>{email}</strong>. Consulte ta
+          boîte de réception et clique sur le lien de validation pour activer ton espace — il est
+          valable 24 heures et ne sert qu&apos;une fois.
+        </p>
+        {resendError && (
+          <p className="notice" style={{ marginTop: 12, borderColor: "#c0392b", color: "#c0392b" }}>
+            {resendError}
+          </p>
+        )}
+        {resent ? (
+          <p style={{ margin: "12px 0 0", fontSize: 14, color: "var(--grey)" }}>
+            Nouveau lien envoyé.
+          </p>
+        ) : (
+          <button
+            className="link-underline"
+            type="button"
+            onClick={handleResend}
+            disabled={resending}
+            style={{ margin: "12px 0 0", fontSize: 14 }}
+          >
+            {resending ? "Envoi…" : "Renvoyer l'email de validation"}
+          </button>
+        )}
+      </div>
     );
   }
 
