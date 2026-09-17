@@ -63,6 +63,8 @@ model Listing {
 
   reviews      Review[]
   favorites    Favorite[]
+  visitSlots   VisitSlot[]
+  visitRequests VisitRequest[]
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -115,6 +117,7 @@ model User {
   sessions      Session[]
   listings      Listing[]
   favorites     Favorite[]
+  visitRequests VisitRequest[]
 
   createdAt     DateTime  @default(now())
 }
@@ -131,6 +134,43 @@ model Favorite {
   listing Listing @relation(fields: [listingRef], references: [ref], onDelete: Cascade)
 
   @@unique([userId, listingRef])
+}
+
+/// Un créneau que le propriétaire propose pour visiter CE bien (donc
+/// rattaché à l'annonce, pas au compte : chaque bien a sa propre adresse).
+model VisitSlot {
+  id         Int      @id @default(autoincrement())
+  listing    Listing  @relation(fields: [listingRef], references: [ref], onDelete: Cascade)
+  listingRef String
+
+  day        String // "Samedi"
+  date       String // "12 sept."
+  time       String // "09h00 – 09h30"
+
+  createdAt  DateTime @default(now())
+}
+
+/// Une demande de visite déposée par un compte connecté sur un créneau.
+model VisitRequest {
+  id         Int      @id @default(autoincrement())
+  listing    Listing  @relation(fields: [listingRef], references: [ref], onDelete: Cascade)
+  listingRef String
+
+  /// Libellé du créneau, figé au moment de la demande : reste lisible même
+  /// si le propriétaire retire le créneau plus tard.
+  slotLabel  String
+
+  requester   User?   @relation(fields: [requesterId], references: [id], onDelete: SetNull)
+  requesterId String?
+  name        String
+  phone       String
+  message     String?
+
+  /// "en_attente" (par défaut) | "confirmee" | "refusee".
+  status     String   @default("en_attente")
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 /// Réglages généraux du site — une seule ligne (id fixe "default").

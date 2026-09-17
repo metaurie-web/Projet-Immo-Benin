@@ -23,7 +23,6 @@ import type {
   MeterKind,
   PropertyType,
   Testimonial,
-  VisitSlot,
 } from "./types";
 
 export const BRAND = "Mon Appart";
@@ -84,15 +83,6 @@ export const FAQ: FaqItem[] = [
     q: "Quelles villes sont couvertes ?",
     a: "Cotonou, Abomey-Calavi, Porto-Novo et Ouidah pour le lancement. Les villes suivantes seront ouvertes selon les demandes que nous recevons.",
   },
-];
-
-export const VISIT_SLOTS: VisitSlot[] = [
-  { day: "Samedi", date: "12 sept.", time: "09h00 – 09h30" },
-  { day: "Samedi", date: "12 sept.", time: "11h00 – 11h30" },
-  { day: "Dimanche", date: "13 sept.", time: "16h00 – 16h30" },
-  { day: "Mardi", date: "15 sept.", time: "17h30 – 18h00" },
-  { day: "Mercredi", date: "16 sept.", time: "08h00 – 08h30" },
-  { day: "Samedi", date: "19 sept.", time: "10h00 – 10h30" },
 ];
 
 /* ------------------------------------------------------------------ */

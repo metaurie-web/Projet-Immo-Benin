@@ -158,7 +158,9 @@ mon-appart/
    │  │  ├─ page.tsx             Liste + filtres    → /annonces (annonces "en_ligne" uniquement)
    │  │  └─ [ref]/
    │  │     ├─ page.tsx          Fiche d'un bien    → /annonces/MA-1042
-   │  │     └─ visite/page.tsx   Prise de rendez-vous → /annonces/MA-1042/visite
+   │  │     └─ visite/
+   │  │        ├─ page.tsx       Prise de rendez-vous (connexion requise) → /annonces/MA-1042/visite
+   │  │        └─ actions.ts     submitVisitRequest() — enregistre la demande, alerte le propriétaire
    │  ├─ verification-identite/
    │  │  ├─ page.tsx             Statut + envoi de la pièce d'identité → /verification-identite
    │  │  └─ actions.ts           uploadIdentityDoc() + submitVerification()
@@ -169,7 +171,9 @@ mon-appart/
    │  ├─ publier/
    │  │  ├─ page.tsx             Assistant propriétaire (identité vérifiée requise) → /publier
    │  │  └─ actions.ts           Action serveur publishListing() — écrit en base
-   │  ├─ espace-proprietaire/page.tsx  Mes annonces + leur statut (rôle proprietaire) → /espace-proprietaire
+   │  ├─ espace-proprietaire/
+   │  │  ├─ page.tsx             Annonces, demandes de visite, créneaux (rôle proprietaire) → /espace-proprietaire
+   │  │  └─ actions.ts           addVisitSlotAction, removeVisitSlotAction, confirmVisitRequestAction, rejectVisitRequestAction
    │  └─ admin/                  Rôle admin requis sur chaque page
    │     ├─ page.tsx             Vue d'ensemble + files de modération → /admin
    │     ├─ annonces/
@@ -193,10 +197,11 @@ mon-appart/
    │  ├─ FavoriteButton.tsx      Bouton favori, sur toute carte/fiche d'annonce
    │  ├─ ProfileForm.tsx         Formulaire de /espace-visiteur
    │  ├─ AnnoncesBrowser.tsx     Filtres de recherche (interactif)
-   │  ├─ VisiteForm.tsx          Choix du créneau + formulaire
+   │  ├─ VisiteForm.tsx          Choix d'un vrai créneau + envoi de la demande (submitVisitRequest)
    │  ├─ PublierWizard.tsx       Assistant 2 étapes
    │  ├─ NewsletterForm.tsx      Alerte SMS
-   │  ├─ ConfirmButton.tsx       Bouton « Confirmer » (espace propriétaire)
+   │  ├─ ConfirmButton.tsx       Confirmer/refuser une demande de visite (espace propriétaire)
+   │  ├─ SlotManager.tsx         Ajouter/retirer les créneaux d'une annonce (espace propriétaire)
    │  ├─ ModerationActions.tsx   Boutons Valider / Refuser une annonce (admin)
    │  ├─ VerificationActions.tsx Boutons Valider / Refuser une identité (admin)
    │  ├─ AdminNav.tsx            Sous-navigation des pages /admin/*
@@ -212,6 +217,7 @@ mon-appart/
    │  ├─ data.ts           Lecture des annonces en base + contenus éditoriaux
    │  ├─ verification.ts   Lecture/écriture du statut de vérification d'un compte
    │  ├─ favorites.ts      Favoris (getFavoriteRefs, withFavorites…)
+   │  ├─ visits.ts          Créneaux et demandes de visite (par annonce, par compte)
    │  ├─ users.ts          Comptes par rôle, changement de rôle (admin)
    │  ├─ settings.ts       Réglages généraux (SiteSettings)
    │  ├─ auth.ts           Configuration next-auth (fournisseur, sessions, rôles)
@@ -252,8 +258,9 @@ Aujourd'hui, **les annonces viennent de la base**. Les fonctions
 `src/lib/data.ts` font une requête Prisma (elles sont donc `async` — les pages
 les « attendent » avec `await`).
 
-Restent écrits en dur, pour l'instant : les villes, la FAQ, les témoignages
-et les créneaux de visite (`src/lib/data.ts`).
+Restent écrits en dur, pour l'instant : les villes, la FAQ et les témoignages
+(`src/lib/data.ts`). Les créneaux et demandes de visite viennent aussi de la
+base (`VisitSlot`, `VisitRequest` — voir § 13).
 
 ---
 
@@ -426,7 +433,43 @@ renvoyé vers `/connexion` plutôt que d'appeler l'action.
 
 ---
 
-## 13. Ce qui n'est PAS encore branché
+## 13. Demandes de visite réelles
+
+Chaque créneau appartient à **une annonce** (`VisitSlot.listingRef`), pas au
+compte propriétaire — un propriétaire avec plusieurs biens propose des
+créneaux différents pour chacun. Chaque demande (`VisitRequest`) est liée au
+créneau choisi (libellé figé, lisible même si le créneau est retiré ensuite),
+à l'annonce, et au compte visiteur qui l'a déposée.
+
+```
+en_attente  →  confirmee   (le propriétaire confirme)
+            →  refusee     (le propriétaire refuse)
+```
+
+- **Côté visiteur** — `/annonces/[ref]/visite` (connexion requise, redirige
+  vers `/connexion?callbackUrl=...` sinon) affiche les vrais créneaux de
+  l'annonce (`getSlotsForListing()`, `src/lib/visits.ts`). Le formulaire
+  (`VisiteForm.tsx`) appelle l'action serveur `submitVisitRequest()`
+  (`src/app/annonces/[ref]/visite/actions.ts`), qui vérifie que l'annonce est
+  bien `en_ligne`, enregistre la demande et alerte le propriétaire par email
+  (`sendVisitRequestEmail()`, `src/lib/mail.ts`) — sauf sur les annonces de
+  démonstration, qui n'ont pas de compte propriétaire réel à notifier
+- **Côté propriétaire** — `/espace-proprietaire` liste les demandes reçues
+  sur ses annonces (`getVisitRequestsForOwner()`) avec les boutons Confirmer
+  / Refuser (`ConfirmButton.tsx` → `confirmVisitRequestAction()` /
+  `rejectVisitRequestAction()`, `src/app/espace-proprietaire/actions.ts`),
+  et gère les créneaux de chaque annonce (`SlotManager.tsx` →
+  `addVisitSlotAction()` / `removeVisitSlotAction()`). Chaque action
+  revérifie que l'annonce ou la demande appartient bien au compte connecté
+  (`requireOwnListing()`) — modifier l'URL ou l'identifiant ne donne accès
+  aux demandes de personne d'autre
+- **Confirmation/refus** déclenche un email au visiteur
+  (`sendVisitStatusEmail()`) et met à jour l'affichage dans
+  `/espace-visiteur` (« Mes demandes de visite », `getVisitRequestsForVisitor()`)
+
+---
+
+## 14. Ce qui n'est PAS encore branché
 
 | Action | État actuel | Étape suivante |
 |---|---|---|
@@ -438,15 +481,15 @@ renvoyé vers `/connexion` plutôt que d'appeler l'action.
 | Vérification d'identité | ✅ complet, une fois par compte, vrai document privé | — |
 | Publier un bien | ✅ enregistré en base, 2 étapes, file de modération réelle | — |
 | Photos | ✅ vrai upload (Vercel Blob) | — |
-| Espace propriétaire | ✅ vraies annonces du compte connecté | demandes de visite réelles |
+| Espace propriétaire | ✅ vraies annonces, demandes de visite et créneaux réels | — |
 | Admin | ✅ comptes, annonces (toutes), réglages, modération | — |
-| Demande de visite | affiche un message, rien n'est envoyé | enregistrement + email au propriétaire |
-| Alerte SMS | idem | route API + service de SMS/email |
+| Demande de visite | ✅ enregistrée en base, email au propriétaire puis au visiteur | — |
+| Alerte SMS | affiche un message, rien n'est envoyé | route API + service de SMS/email |
 | Paiement de la commission | publication gratuite pour l'instant | intégration MTN MoMo / Moov Money |
 
 ---
 
-## 14. Commandes utiles
+## 15. Commandes utiles
 
 | Commande | Effet |
 |---|---|

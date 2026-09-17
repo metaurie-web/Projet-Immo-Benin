@@ -4,8 +4,21 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { getFavoriteListings } from "@/lib/favorites";
+import { getVisitRequestsForVisitor } from "@/lib/visits";
 import ListingCard from "@/components/ListingCard";
 import ProfileForm from "@/components/ProfileForm";
+
+const VISIT_STATUS_LABEL: Record<string, string> = {
+  en_attente: "En attente de confirmation",
+  confirmee: "Confirmée",
+  refusee: "Refusée",
+};
+
+const VISIT_STATUS_BADGE_CLASS: Record<string, string> = {
+  en_attente: "tag tag--neutral",
+  confirmee: "tag",
+  refusee: "tag tag--warn",
+};
 
 export const metadata: Metadata = {
   title: "Mon espace",
@@ -24,6 +37,7 @@ export default async function EspaceVisiteurPage() {
 
   const favorites = await getFavoriteListings(session.user.id);
   const favoritesWithFlag = favorites.map((l) => ({ ...l, isFavorite: true }));
+  const visitRequests = await getVisitRequestsForVisitor(session.user.id);
 
   return (
     <section className="wrap section">
@@ -52,6 +66,30 @@ export default async function EspaceVisiteurPage() {
         Mon profil
       </h2>
       <ProfileForm initialName={session.user.name || ""} />
+
+      <h2
+        className="h-serif h-serif--26"
+        style={{ margin: "40px 0 22px", borderBottom: "1px solid var(--hair)", paddingBottom: 10 }}
+      >
+        Mes demandes de visite
+      </h2>
+      {visitRequests.length === 0 ? (
+        <p className="muted" style={{ padding: "0 0 24px" }}>
+          Aucune demande de visite pour l&apos;instant.
+        </p>
+      ) : (
+        <div style={{ marginBottom: 10 }}>
+          {visitRequests.map((v) => (
+            <div className="request-row" key={v.id} data-done={v.status !== "en_attente"}>
+              <div>
+                <p className="request-row__who">{v.listingTitle}</p>
+                <p className="request-row__meta">{v.slotLabel}</p>
+              </div>
+              <span className={VISIT_STATUS_BADGE_CLASS[v.status]}>{VISIT_STATUS_LABEL[v.status]}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <h2
         className="h-serif h-serif--26"

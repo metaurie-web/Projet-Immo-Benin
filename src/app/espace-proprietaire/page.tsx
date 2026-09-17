@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { getListingsByOwner } from "@/lib/data";
 import { fcfa, statusBadgeClass, statusLabel, verificationBadgeClass, verificationLabel } from "@/lib/format";
+import { getSlotsForListing, getVisitRequestsForOwner } from "@/lib/visits";
 import ConfirmButton from "@/components/ConfirmButton";
+import SlotManager from "@/components/SlotManager";
 
 export const metadata: Metadata = {
   title: "Espace propriétaire",
@@ -18,21 +20,11 @@ export const metadata: Metadata = {
 // ou validée doit apparaître tout de suite.
 export const dynamic = "force-dynamic";
 
-/* Les demandes de visite et les créneaux restent des données de démonstration
-   — le modèle VisitRequest (base de données) arrive à l'étape suivante. */
-const VISIT_REQUESTS = [
-  { who: "Bernadette H.", meta: "Samedi 12 sept., 09h00 · Appt 2 chambres · +229 01 97 44 12 08" },
-  { who: "Moïse T.", meta: "Dimanche 13 sept., 16h00 · Appt 2 chambres · +229 01 96 08 71 30" },
-  { who: "Grâce D.", meta: "Mardi 15 sept., 17h30 · Appt 2 chambres · +229 01 99 15 60 22" },
-];
-
-const OWNER_SLOTS = [
-  "Sam. 12 sept. 09h00",
-  "Sam. 12 sept. 11h00",
-  "Dim. 13 sept. 16h00",
-  "Mar. 15 sept. 17h30",
-  "Mer. 16 sept. 08h00",
-];
+const VISIT_STATUS_LABEL: Record<string, string> = {
+  en_attente: "En attente",
+  confirmee: "Confirmée",
+  refusee: "Refusée",
+};
 
 export default async function EspaceProprietairePage() {
   const session = await getServerSession(authOptions);
@@ -44,6 +36,12 @@ export default async function EspaceProprietairePage() {
   if (session.user.role !== "proprietaire") redirect("/espace-visiteur");
 
   const listings = await getListingsByOwner(session.user.id);
+  const visitRequests = await getVisitRequestsForOwner(session.user.id);
+  const slotsByListing = Object.fromEntries(
+    await Promise.all(
+      listings.map(async (l) => [l.ref, await getSlotsForListing(l.ref)] as const),
+    ),
+  );
   const enLigne = listings.filter((l) => l.status === "en_ligne").length;
   const enAttente = listings.filter(
     (l) => l.status === "en_attente" || l.status === "correction_demandee",
@@ -145,23 +143,31 @@ export default async function EspaceProprietairePage() {
         className="h-serif h-serif--26"
         style={{ margin: "40px 0 0", borderBottom: "1px solid var(--hair)", paddingBottom: 10 }}
       >
-        Demandes de visite à confirmer
+        Demandes de visite
       </h2>
-      <p style={{ margin: "10px 0 0", fontSize: 12.5, color: "var(--grey)" }}>
-        Section encore en démonstration — les vraies demandes de visite arrivent à l&apos;étape
-        suivante.
-      </p>
-      <div>
-        {VISIT_REQUESTS.map((v) => (
-          <div className="request-row" key={v.who}>
-            <div>
-              <p className="request-row__who">{v.who}</p>
-              <p className="request-row__meta">{v.meta}</p>
+      {visitRequests.length === 0 ? (
+        <p className="muted" style={{ padding: "24px 0" }}>
+          Aucune demande de visite pour l&apos;instant.
+        </p>
+      ) : (
+        <div>
+          {visitRequests.map((v) => (
+            <div className="request-row" key={v.id} data-done={v.status !== "en_attente"}>
+              <div>
+                <p className="request-row__who">{v.name}</p>
+                <p className="request-row__meta">
+                  {v.listingTitle} · {v.slotLabel} · {v.phone}
+                </p>
+                {v.message && <p className="request-row__meta">« {v.message} »</p>}
+                {v.status !== "en_attente" && (
+                  <p className="request-row__meta">{VISIT_STATUS_LABEL[v.status]}</p>
+                )}
+              </div>
+              <ConfirmButton requestId={v.id} initialStatus={v.status} />
             </div>
-            <ConfirmButton />
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       <h2
         className="h-serif h-serif--26"
@@ -169,16 +175,20 @@ export default async function EspaceProprietairePage() {
       >
         Créneaux que je propose aux visiteurs
       </h2>
-      <div className="slot-tags">
-        {OWNER_SLOTS.map((s) => (
-          <span className="slot-tag" key={s}>
-            {s}
-          </span>
-        ))}
-        <button className="slot-tag slot-tag--add" type="button">
-          + Ajouter un créneau
-        </button>
-      </div>
+      {listings.length === 0 ? (
+        <p className="muted" style={{ padding: "24px 0" }}>
+          Publie un bien pour pouvoir y proposer des créneaux de visite.
+        </p>
+      ) : (
+        listings.map((l) => (
+          <div key={l.ref} style={{ padding: "14px 0", borderBottom: "1px solid var(--hair)" }}>
+            <p className="request-row__who" style={{ marginBottom: 4 }}>
+              {l.title}
+            </p>
+            <SlotManager listingRef={l.ref} initialSlots={slotsByListing[l.ref] ?? []} />
+          </div>
+        ))
+      )}
     </section>
   );
 }

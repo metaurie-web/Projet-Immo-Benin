@@ -83,9 +83,3 @@ export interface FaqItem {
   q: string;
   a: string;
 }
-
-export interface VisitSlot {
-  day: string;
-  date: string;
-  time: string;
-}
