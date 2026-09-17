@@ -84,17 +84,30 @@ recharge toute seule. Pour arrêter le serveur : `Ctrl + C` dans le terminal.
 
 ---
 
-## 5. Se connecter (lien magique)
+## 5. S'inscrire et se connecter (lien magique)
 
 Le site utilise une connexion **sans mot de passe** : on indique son email,
 on reçoit un lien, on clique dessus.
 
-1. Aller sur <http://localhost:3000/connexion>
-2. Taper un email (le tien, par exemple) et cliquer « Recevoir mon lien de connexion »
-3. **Regarder le terminal** où tourne `npm run dev` : tant qu'aucun service
+**Inscription et connexion sont deux pages séparées** (`/inscription` et
+`/connexion`, reliées par un lien dans chaque sens) :
+
+- `/inscription` **crée le compte** (nom + email) — refuse si l'email est
+  déjà utilisé, avec un lien direct vers `/connexion`
+- `/connexion` **exige qu'un compte existe déjà** — un email inconnu est
+  refusé (« Aucun compte n'est associé à cet email »), avec un lien direct
+  vers `/inscription`. Sans ce contrôle, next-auth aurait créé un compte
+  pour n'importe quel email tapé là, ce qui aurait vidé l'inscription de
+  son sens
+
+Pour tester :
+
+1. Aller sur <http://localhost:3000/inscription>, créer un compte
+2. **Regarder le terminal** où tourne `npm run dev` : tant qu'aucun service
    d'emails n'est configuré (voir § 8), le lien s'affiche là plutôt que
    d'être vraiment envoyé — pratique pour tester sans rien créer
-4. Copier-coller ce lien dans le navigateur → connecté
+3. Copier-coller ce lien dans le navigateur → connecté, envoyé vers
+   `/mon-espace` qui aiguille vers le bon espace selon le rôle
 
 Par défaut, un compte est créé avec le rôle `"visiteur"` et atterrit sur
 `/espace-visiteur` (profil + favoris). Pour te donner le rôle **admin**
@@ -132,7 +145,11 @@ mon-appart/
    │  ├─ not-found.tsx           Page 404
    │  ├─ connexion/
    │  │  ├─ page.tsx             Formulaire de connexion → /connexion
+   │  │  ├─ actions.ts           ensureAccountExists() — refuse un email inconnu
    │  │  └─ verification/page.tsx  « Vérifiez votre boîte mail »
+   │  ├─ inscription/
+   │  │  ├─ page.tsx             Formulaire de création de compte → /inscription
+   │  │  └─ actions.ts           registerAccount() — refuse un email déjà utilisé
    │  ├─ api/
    │  │  ├─ auth/[...nextauth]/route.ts  Routes de next-auth (ne pas modifier)
    │  │  ├─ upload/route.ts      Jeton d'upload Vercel Blob — photos (store public)
@@ -167,6 +184,7 @@ mon-appart/
    │  ├─ SiteHeader.tsx / Nav.tsx / SiteFooter.tsx
    │  ├─ AuthProvider.tsx        Contexte de session (nécessaire à useSession())
    │  ├─ SignInForm.tsx          Formulaire de /connexion
+   │  ├─ SignUpForm.tsx          Formulaire de /inscription
    │  ├─ ListingCard.tsx / Faq.tsx
    │  ├─ ListingPhoto.tsx        Vraie photo (URL) ou vignette de démonstration
    │  ├─ PhotoUploadSlot.tsx     Envoie une photo vers Vercel Blob (formulaire /publier)
@@ -245,6 +263,15 @@ Connexion **par lien magique uniquement** : pas de mot de passe, pas de
 champ à sécuriser nous-mêmes.
 
 - **Fournisseur** : `EmailProvider` de next-auth (`src/lib/auth.ts`)
+- **Inscription** (`/inscription`, `src/app/inscription/actions.ts`,
+  `registerAccount()`) : crée le `User` (nom + email, rôle `"visiteur"`)
+  puis déclenche l'envoi du lien via le même `signIn("email", …)` que la
+  connexion. Refuse si l'email existe déjà (comparaison normalisée en
+  minuscules, pour éviter les doublons `Nom@X.com` / `nom@x.com`)
+- **Connexion** (`/connexion`) : `ensureAccountExists()`
+  (`src/app/connexion/actions.ts`) vérifie qu'un compte existe **avant**
+  d'appeler `signIn()` — un email inconnu est refusé avec un lien vers
+  `/inscription`, plutôt que de créer un compte silencieusement
 - **Sessions** : stockées en base (table `Session`), pas en JWT — un
   changement de rôle prend effet tout de suite, sans reconnexion
 - **Rôles** : chaque `User` a un `role` — `"visiteur"` (par défaut),
@@ -405,7 +432,7 @@ renvoyé vers `/connexion` plutôt que d'appeler l'action.
 |---|---|---|
 | Recherche / filtres | ✅ lit la base de données | — |
 | Fiche d'un bien | ✅ lit la base de données | — |
-| Connexion (lien magique) | ✅ fonctionne, 3 rôles (visiteur/proprietaire/admin) | — |
+| Inscription + connexion (lien magique) | ✅ pages séparées, 3 rôles (visiteur/proprietaire/admin) | — |
 | Séparation des espaces | ✅ chacun redirigé vers le sien, gardes-fous serveur | — |
 | Favoris | ✅ vrai (modèle `Favorite`) | — |
 | Vérification d'identité | ✅ complet, une fois par compte, vrai document privé | — |
