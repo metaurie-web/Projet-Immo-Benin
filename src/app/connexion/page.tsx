@@ -21,12 +21,12 @@ export default async function ConnexionPage({
   const { callbackUrl, error } = await searchParams;
 
   // Déjà connecté : inutile de repasser par ici.
-  if (session) redirect(callbackUrl || "/espace-proprietaire");
+  if (session) redirect(callbackUrl || "/mon-espace");
 
   return (
     <section className="wrap section" style={{ maxWidth: 480 }}>
       <p className="eyebrow" style={{ marginBottom: 8 }}>
-        Espace propriétaire
+        Mon compte
       </p>
       <h1 className="display" style={{ fontSize: "clamp(30px, 3.6vw, 44px)", marginBottom: 18 }}>
         Connexion par lien magique

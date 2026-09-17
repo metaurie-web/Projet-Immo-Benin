@@ -96,8 +96,9 @@ on reçoit un lien, on clique dessus.
    d'être vraiment envoyé — pratique pour tester sans rien créer
 4. Copier-coller ce lien dans le navigateur → connecté
 
-Par défaut, un compte est créé avec le rôle `"proprietaire"`. Pour te donner
-le rôle **admin** (accès à `/admin`) :
+Par défaut, un compte est créé avec le rôle `"visiteur"` et atterrit sur
+`/espace-visiteur` (profil + favoris). Pour te donner le rôle **admin**
+(accès à `/admin`) :
 
 ```powershell
 npm run make-admin -- ton-email@exemple.com
@@ -144,13 +145,23 @@ mon-appart/
    │  ├─ verification-identite/
    │  │  ├─ page.tsx             Statut + envoi de la pièce d'identité → /verification-identite
    │  │  └─ actions.ts           uploadIdentityDoc() + submitVerification()
+   │  ├─ mon-espace/page.tsx     Aiguillage (sans interface) → le bon espace selon le rôle
+   │  ├─ espace-visiteur/
+   │  │  ├─ page.tsx             Profil + favoris (rôle visiteur/proprietaire) → /espace-visiteur
+   │  │  └─ actions.ts           toggleFavorite() + updateProfile()
    │  ├─ publier/
    │  │  ├─ page.tsx             Assistant propriétaire (identité vérifiée requise) → /publier
    │  │  └─ actions.ts           Action serveur publishListing() — écrit en base
-   │  ├─ espace-proprietaire/page.tsx  Mes annonces + leur statut → /espace-proprietaire
-   │  └─ admin/
-   │     ├─ page.tsx             Modération : identités + annonces (rôle admin requis) → /admin
-   │     └─ actions.ts           moderateListing() / moderateVerification() — changent le statut
+   │  ├─ espace-proprietaire/page.tsx  Mes annonces + leur statut (rôle proprietaire) → /espace-proprietaire
+   │  └─ admin/                  Rôle admin requis sur chaque page
+   │     ├─ page.tsx             Vue d'ensemble + files de modération → /admin
+   │     ├─ annonces/
+   │     │  ├─ page.tsx          Toutes les annonces, tous statuts → /admin/annonces
+   │     │  └─ [ref]/modifier/page.tsx  Modifier une annonce
+   │     ├─ proprietaires/page.tsx  Comptes propriétaires → /admin/proprietaires
+   │     ├─ visiteurs/page.tsx   Comptes visiteurs → /admin/visiteurs
+   │     ├─ parametres/page.tsx  Réglages généraux (commission…) → /admin/parametres
+   │     └─ actions.ts           Toutes les actions admin (voir requireAdmin())
    │
    ├─ components/         Morceaux d'interface réutilisables
    │  ├─ SiteHeader.tsx / Nav.tsx / SiteFooter.tsx
@@ -161,20 +172,30 @@ mon-appart/
    │  ├─ PhotoUploadSlot.tsx     Envoie une photo vers Vercel Blob (formulaire /publier)
    │  ├─ VerificationDocUpload.tsx  Envoie la pièce d'identité (store privé)
    │  ├─ VerificationForm.tsx    Formulaire de /verification-identite
+   │  ├─ FavoriteButton.tsx      Bouton favori, sur toute carte/fiche d'annonce
+   │  ├─ ProfileForm.tsx         Formulaire de /espace-visiteur
    │  ├─ AnnoncesBrowser.tsx     Filtres de recherche (interactif)
    │  ├─ VisiteForm.tsx          Choix du créneau + formulaire
    │  ├─ PublierWizard.tsx       Assistant 2 étapes
    │  ├─ NewsletterForm.tsx      Alerte SMS
    │  ├─ ConfirmButton.tsx       Bouton « Confirmer » (espace propriétaire)
    │  ├─ ModerationActions.tsx   Boutons Valider / Refuser une annonce (admin)
-   │  └─ VerificationActions.tsx Boutons Valider / Refuser une identité (admin)
+   │  ├─ VerificationActions.tsx Boutons Valider / Refuser une identité (admin)
+   │  ├─ AdminNav.tsx            Sous-navigation des pages /admin/*
+   │  ├─ AccountActions.tsx      Promouvoir/rétrograder/supprimer un compte (admin)
+   │  ├─ AdminListingActions.tsx Changer le statut/modifier/supprimer une annonce (admin)
+   │  ├─ EditListingForm.tsx     Formulaire de /admin/annonces/[ref]/modifier
+   │  └─ SettingsForm.tsx        Formulaire de /admin/parametres
    │
    ├─ lib/                Code non visuel
-   │  ├─ types.ts          Formes des données (Listing, City…)
+   │  ├─ types.ts          Formes des données (Listing, User Role…)
    │  ├─ format.ts         fcfa(), fmt() — mise en forme des montants
    │  ├─ db.ts             L'instance unique de connexion à la base (Prisma)
    │  ├─ data.ts           Lecture des annonces en base + contenus éditoriaux
    │  ├─ verification.ts   Lecture/écriture du statut de vérification d'un compte
+   │  ├─ favorites.ts      Favoris (getFavoriteRefs, withFavorites…)
+   │  ├─ users.ts          Comptes par rôle, changement de rôle (admin)
+   │  ├─ settings.ts       Réglages généraux (SiteSettings)
    │  ├─ auth.ts           Configuration next-auth (fournisseur, sessions, rôles)
    │  └─ mail.ts           Envoi de l'email de connexion (Resend, ou console)
    │
@@ -226,12 +247,11 @@ champ à sécuriser nous-mêmes.
 - **Fournisseur** : `EmailProvider` de next-auth (`src/lib/auth.ts`)
 - **Sessions** : stockées en base (table `Session`), pas en JWT — un
   changement de rôle prend effet tout de suite, sans reconnexion
-- **Rôles** : chaque `User` a un `role` (`"proprietaire"` par défaut, ou
-  `"admin"`) ; `session.user.role` est disponible partout (voir
-  `src/types/next-auth.d.ts`)
-- **Pages protégées** : `/espace-proprietaire` (connexion requise) et
-  `/admin` (rôle `admin` requis) redirigent ou affichent un message sinon
-  — voir le début de chaque `page.tsx`
+- **Rôles** : chaque `User` a un `role` — `"visiteur"` (par défaut),
+  `"proprietaire"` ou `"admin"`. Détail complet au § 12
+- **Pages protégées** : chacune vérifie `session.user.role` et **redirige**
+  vers le bon espace si ça ne correspond pas — voir le début de chaque
+  `page.tsx`
 - **Envoi de l'email** (`src/lib/mail.ts`) :
   - sans `RESEND_API_KEY` dans `.env` → le lien s'affiche dans le terminal
     (`npm run dev`), pratique pour développer sans rien créer
@@ -336,25 +356,70 @@ que ce jeton n'est pas renseigné.
 
 ---
 
-## 12. Ce qui n'est PAS encore branché
+## 12. Rôles et espaces
+
+Trois espaces **strictement séparés**, un par rôle :
+
+| Rôle | Espace | Accès |
+|---|---|---|
+| `visiteur` (par défaut à l'inscription) | `/espace-visiteur` | Profil, favoris |
+| `proprietaire` | `/espace-proprietaire` | Ses propres annonces, uniquement |
+| `admin` | `/admin` | Tout : comptes, annonces, réglages |
+
+**Comment on devient propriétaire.** Il n'y a pas de bouton « devenir
+propriétaire » séparé : un `visiteur` qui va au bout de `/publier` passe par
+la vérification d'identité (§ 11), et c'est en la **validant** qu'un admin
+le fait passer au rôle `proprietaire` (`moderateVerification()`,
+`src/app/admin/actions.ts`). Un admin peut aussi changer le rôle d'un
+compte à la main, depuis `/admin/proprietaires` ou `/admin/visiteurs`
+(`changeUserRoleAction()`).
+
+**`/mon-espace`** — aucune interface, juste un aiguillage : après
+connexion (destination par défaut dans `SignInForm.tsx`), il redirige vers
+`/admin`, `/espace-proprietaire` ou `/espace-visiteur` selon le rôle. Le
+lien « Mon espace » du menu pointe toujours ici, jamais vers un espace en
+dur — il est donc toujours correct, quel que soit qui est connecté.
+
+**La sécurité ne repose jamais sur l'interface.** Chaque page protégée
+revérifie elle-même `session.user.role` (`getServerSession` côté serveur) et
+**redirige** vers le bon espace si ça ne correspond pas — modifier l'URL à la
+main ne donne accès à rien de plus. Chaque action serveur fait de même
+(`requireAdmin()` dans `src/app/admin/actions.ts`) : une page protégée ne
+suffit pas, une action serveur est un point d'entrée public en soi.
+
+**Favoris** (`src/lib/favorites.ts`, modèle `Favorite`) : bouton présent sur
+toute carte ou fiche d'annonce (`FavoriteButton.tsx`). Non connecté → clic
+renvoyé vers `/connexion` plutôt que d'appeler l'action.
+
+**Admin élargi** (`/admin/*`, sous-navigation via `AdminNav.tsx`) :
+- `/admin` — vue d'ensemble + files de modération (identités, annonces en attente)
+- `/admin/annonces` — **toutes** les annonces, tous statuts ; changer le statut, modifier, supprimer
+- `/admin/proprietaires`, `/admin/visiteurs` — comptes par rôle ; promouvoir/rétrograder, supprimer
+- `/admin/parametres` — réglages généraux (montant de la commission, pour l'instant — `src/lib/settings.ts`, modèle `SiteSettings`)
+
+---
+
+## 13. Ce qui n'est PAS encore branché
 
 | Action | État actuel | Étape suivante |
 |---|---|---|
 | Recherche / filtres | ✅ lit la base de données | — |
 | Fiche d'un bien | ✅ lit la base de données | — |
-| Connexion (lien magique) | ✅ fonctionne, rôles proprietaire/admin | — |
+| Connexion (lien magique) | ✅ fonctionne, 3 rôles (visiteur/proprietaire/admin) | — |
+| Séparation des espaces | ✅ chacun redirigé vers le sien, gardes-fous serveur | — |
+| Favoris | ✅ vrai (modèle `Favorite`) | — |
 | Vérification d'identité | ✅ complet, une fois par compte, vrai document privé | — |
 | Publier un bien | ✅ enregistré en base, 2 étapes, file de modération réelle | — |
 | Photos | ✅ vrai upload (Vercel Blob) | — |
 | Espace propriétaire | ✅ vraies annonces du compte connecté | demandes de visite réelles |
-| Admin | ✅ vraie file de modération (annonces + identités) | — |
+| Admin | ✅ comptes, annonces (toutes), réglages, modération | — |
 | Demande de visite | affiche un message, rien n'est envoyé | enregistrement + email au propriétaire |
 | Alerte SMS | idem | route API + service de SMS/email |
 | Paiement de la commission | publication gratuite pour l'instant | intégration MTN MoMo / Moov Money |
 
 ---
 
-## 13. Commandes utiles
+## 14. Commandes utiles
 
 | Commande | Effet |
 |---|---|

@@ -38,6 +38,11 @@ export default async function EspaceProprietairePage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/connexion?callbackUrl=/espace-proprietaire");
 
+  // Espace réservé aux propriétaires : chacun est renvoyé vers le sien,
+  // qu'il ait tapé cette URL par erreur ou volontairement.
+  if (session.user.role === "admin") redirect("/admin");
+  if (session.user.role !== "proprietaire") redirect("/espace-visiteur");
+
   const listings = await getListingsByOwner(session.user.id);
   const enLigne = listings.filter((l) => l.status === "en_ligne").length;
   const enAttente = listings.filter(

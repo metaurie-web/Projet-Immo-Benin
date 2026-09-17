@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getListing } from "@/lib/data";
+import { withFavorites } from "@/lib/favorites";
 import { fcfa, plural } from "@/lib/format";
 import ListingPhoto from "@/components/ListingPhoto";
+import FavoriteButton from "@/components/FavoriteButton";
 
 type Params = { params: Promise<{ ref: string }> };
 
@@ -19,8 +21,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function AnnonceDetailPage({ params }: Params) {
   const { ref } = await params;
-  const l = await getListing(ref);
-  if (!l) notFound();
+  const found = await getListing(ref);
+  if (!found) notFound();
+  const [l] = await withFavorites([found]);
 
   const specs = [
     { k: "Type", v: l.type },
@@ -123,10 +126,11 @@ export default async function AnnonceDetailPage({ params }: Params) {
         </div>
 
         <aside className="detail-aside">
-          <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <p className="price-big num">
               {fcfa(l.price).replace(" FCFA", "")} <small>FCFA / mois</small>
             </p>
+            <FavoriteButton listingRef={l.ref} initialFavorited={l.isFavorite ?? false} />
           </div>
           <div style={{ borderTop: "1px solid var(--hair)", paddingTop: 16 }}>
             <p className="eyebrow eyebrow--muted" style={{ marginBottom: 6 }}>

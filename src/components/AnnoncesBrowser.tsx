@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import type { Listing } from "@/lib/types";
 import { fcfa, fmt, plural } from "@/lib/format";
 import ListingPhoto from "@/components/ListingPhoto";
+import FavoriteButton from "@/components/FavoriteButton";
 
 const TYPES = ["Chambre-salon", "Appartement", "Maison basse", "Villa"] as const;
 
@@ -264,13 +265,16 @@ export default function AnnoncesBrowser({ listings }: { listings: Listing[] }) {
                     <span className="muted" style={{ fontSize: 12.5 }}>
                       ★ {l.rating} ({l.reviews} avis)
                     </span>
-                    <Link
-                      className="btn btn--sm"
-                      style={{ marginLeft: "auto" }}
-                      href={`/annonces/${l.ref}`}
-                    >
-                      Voir et demander une visite
-                    </Link>
+                    <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
+                      <FavoriteButton
+                        listingRef={l.ref}
+                        initialFavorited={l.isFavorite ?? false}
+                        compact
+                      />
+                      <Link className="btn btn--sm" href={`/annonces/${l.ref}`}>
+                        Voir et demander une visite
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </article>

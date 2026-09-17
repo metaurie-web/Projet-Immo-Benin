@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { COMMISSION } from "@/lib/data";
 import { fcfa, fmt } from "@/lib/format";
 import { publishListing, type PublishInput } from "@/app/publier/actions";
 import PhotoUploadSlot from "@/components/PhotoUploadSlot";
@@ -50,9 +49,8 @@ const INITIAL_FORM: PublishInput = {
   photos: [...PHOTO_LABELS],
 };
 
-const commissionLabel = fmt(COMMISSION);
-
-export default function PublierWizard() {
+export default function PublierWizard({ commission }: { commission: number }) {
+  const commissionLabel = fmt(commission);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<PublishInput>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);

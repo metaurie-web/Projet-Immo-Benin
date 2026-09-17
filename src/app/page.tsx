@@ -3,12 +3,13 @@ import ListingCard from "@/components/ListingCard";
 import Faq from "@/components/Faq";
 import NewsletterForm from "@/components/NewsletterForm";
 import { CITIES, TESTIMONIALS, getFeaturedListings } from "@/lib/data";
+import { withFavorites } from "@/lib/favorites";
 
 // Relire la base de données à chaque visite.
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const featured = await getFeaturedListings();
+  const featured = await withFavorites(await getFeaturedListings());
 
   return (
     <>

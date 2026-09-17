@@ -2,19 +2,19 @@
    next-auth, pour ne jamais avoir à écrire de `as any` dans le reste du code. */
 
 import type { DefaultSession } from "next-auth";
-import type { VerificationStatus } from "@/lib/types";
+import type { UserRole, VerificationStatus } from "@/lib/types";
 
 declare module "next-auth" {
   interface Session {
     user: {
       id: string;
-      role: string;
+      role: UserRole;
       verificationStatus: VerificationStatus;
     } & DefaultSession["user"];
   }
 
   interface User {
-    role: string;
+    role: UserRole;
     verificationStatus: VerificationStatus;
   }
 }

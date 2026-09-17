@@ -33,7 +33,7 @@ export default async function VerificationIdentitePage({
   return (
     <section className="wrap section" style={{ maxWidth: 560 }}>
       <p className="eyebrow" style={{ marginBottom: 8 }}>
-        Espace propriétaire
+        Mon compte
       </p>
       <h1
         className="display"

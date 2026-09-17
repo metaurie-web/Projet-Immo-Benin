@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import AnnoncesBrowser from "@/components/AnnoncesBrowser";
 import { getAllListings } from "@/lib/data";
+import { withFavorites } from "@/lib/favorites";
 
 export const metadata: Metadata = {
   title: "Annonces à louer",
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AnnoncesPage() {
-  const listings = await getAllListings();
+  const listings = await withFavorites(await getAllListings());
 
   return (
     <section className="wrap section">

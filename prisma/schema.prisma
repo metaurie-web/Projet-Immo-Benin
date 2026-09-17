@@ -62,6 +62,7 @@ model Listing {
   costRows     Json // { k: string; v: string }[] — lignes du tableau "ce que vous payez"
 
   reviews      Review[]
+  favorites    Favorite[]
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -87,7 +88,7 @@ model Review {
 /*  https://authjs.dev/getting-started/adapters/prisma                 */
 /* ------------------------------------------------------------------ */
 
-/// Un utilisateur du site (propriétaire ou administrateur).
+/// Un utilisateur du site : visiteur, propriétaire ou administrateur.
 model User {
   id            String    @id @default(cuid())
   name          String?
@@ -95,8 +96,11 @@ model User {
   emailVerified DateTime?
   image         String?
 
-  /// "proprietaire" (par défaut) ou "admin".
-  role          String    @default("proprietaire")
+  /// "visiteur" (par défaut, à l'inscription) | "proprietaire" | "admin".
+  /// Un visiteur devient propriétaire automatiquement quand un admin valide
+  /// sa vérification d'identité (voir moderateVerification()) — ou peut
+  /// être promu manuellement depuis /admin/proprietaires.
+  role          String    @default("visiteur")
 
   /// Vérification d'identité du propriétaire — faite UNE SEULE FOIS par
   /// compte, avant sa première publication. "non_verifie" (par défaut) |
@@ -110,8 +114,29 @@ model User {
   accounts      Account[]
   sessions      Session[]
   listings      Listing[]
+  favorites     Favorite[]
 
   createdAt     DateTime  @default(now())
+}
+
+/// Un bien mis en favori par un visiteur (ou un propriétaire — rien ne l'en
+/// empêche). Une seule fois par personne et par bien.
+model Favorite {
+  id         Int      @id @default(autoincrement())
+  userId     String
+  listingRef String
+  createdAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingRef], references: [ref], onDelete: Cascade)
+
+  @@unique([userId, listingRef])
+}
+
+/// Réglages généraux du site — une seule ligne (id fixe "default").
+model SiteSettings {
+  id               String @id @default("default")
+  commissionAmount Int    @default(5000) // FCFA, pour 30 jours de publication
 }
 
 /// Compte de connexion externe (non utilisé pour l'instant : on ne se

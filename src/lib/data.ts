@@ -27,7 +27,8 @@ import type {
 } from "./types";
 
 export const BRAND = "Mon Appart";
-export const COMMISSION = 5000; // FCFA, 30 jours de publication
+// Le montant de la commission est un réglage en base, éditable par un
+// admin — voir src/lib/settings.ts et /admin/parametres.
 
 /* ------------------------------------------------------------------ */
 /*  Contenus éditoriaux (statiques)                                     */
@@ -102,7 +103,7 @@ export const VISIT_SLOTS: VisitSlot[] = [
 type ListingRow = Prisma.ListingGetPayload<{ include: { reviews: true } }>;
 
 // Traduit une ligne de base de données vers la forme utilisée par les pages.
-function toListing(row: ListingRow): Listing {
+export function toListing(row: ListingRow): Listing {
   return {
     ref: row.ref,
     title: row.title,
@@ -190,6 +191,24 @@ export async function getPendingListings(): Promise<Listing[]> {
     orderBy: { id: "asc" },
   });
   return rows.map(toListing);
+}
+
+/** TOUTES les annonces, quel que soit leur statut — réservé à /admin/annonces. */
+export async function getAllListingsForAdmin(): Promise<Listing[]> {
+  const rows = await prisma.listing.findMany({
+    include: { reviews: true },
+    orderBy: { id: "desc" },
+  });
+  return rows.map(toListing);
+}
+
+/** Une annonce par référence, quel que soit son statut — réservé à l'admin. */
+export async function getListingForAdmin(ref: string): Promise<Listing | null> {
+  const row = await prisma.listing.findUnique({
+    where: { ref },
+    include: { reviews: true },
+  });
+  return row ? toListing(row) : null;
 }
 
 /** Décompte des annonces par statut, pour les tableaux de bord. */

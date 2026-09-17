@@ -23,7 +23,9 @@ export default function SignInForm({
     setSending(true);
     // redirect: true (par défaut) => next-auth envoie vers /connexion/verification
     // en cas de succès, ou revient ici avec ?error=... en cas de problème.
-    await signIn("email", { email, callbackUrl: callbackUrl || "/espace-proprietaire" });
+    // Sans callbackUrl explicite (lien "Connexion" du menu) : /mon-espace
+    // aiguille automatiquement vers le bon espace selon le rôle.
+    await signIn("email", { email, callbackUrl: callbackUrl || "/mon-espace" });
   }
 
   return (

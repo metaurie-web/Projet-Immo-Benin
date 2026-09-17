@@ -4,15 +4,16 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { getListingStatusCounts, getPendingListings } from "@/lib/data";
 import { getPendingVerifications } from "@/lib/verification";
+import { getAccountCounts } from "@/lib/users";
 import { relativeTime } from "@/lib/format";
+import AdminNav from "@/components/AdminNav";
 import ModerationActions from "@/components/ModerationActions";
 import VerificationActions from "@/components/VerificationActions";
 
 export const metadata: Metadata = {
-  title: "Administration · Modération",
+  title: "Administration",
   description:
-    "File de validation des annonces : contrôle de l'identité du propriétaire, du titre de " +
-    "propriété, de la cohérence du loyer et de la qualité des photos avant publication.",
+    "Vue d'ensemble de la plateforme : comptes, annonces et vérifications d'identité en attente.",
 };
 
 // Toujours relire la base de données : la file de modération doit être à jour.
@@ -22,51 +23,39 @@ export default async function AdminPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/connexion?callbackUrl=/admin");
 
-  if (session.user.role !== "admin") {
-    return (
-      <section className="wrap section">
-        <div className="panel" style={{ maxWidth: 560 }}>
-          <p className="eyebrow eyebrow--muted" style={{ marginBottom: 10 }}>
-            Accès refusé
-          </p>
-          <p style={{ margin: 0, color: "var(--muted)", lineHeight: 1.7 }}>
-            Cette page est réservée aux administrateurs. Le compte{" "}
-            <strong>{session.user.email}</strong> est connecté avec le rôle «&nbsp;{session.user.role}
-            &nbsp;». Si tu penses que c&apos;est une erreur, promeus ce compte avec{" "}
-            <code>npm run make-admin -- {session.user.email}</code>.
-          </p>
-        </div>
-      </section>
-    );
-  }
+  // Espace strictement réservé aux administrateurs : personne d'autre ne
+  // doit pouvoir y rester, même en tapant l'URL directement.
+  if (session.user.role !== "admin") redirect("/mon-espace");
 
-  const [pending, counts, pendingVerifications] = await Promise.all([
+  const [pending, counts, pendingVerifications, accountCounts] = await Promise.all([
     getPendingListings(),
     getListingStatusCounts(),
     getPendingVerifications(),
+    getAccountCounts(),
   ]);
 
   const stats = [
     { k: "Identités en attente", v: pendingVerifications.length },
     { k: "Annonces en attente", v: counts.en_attente },
-    { k: "En ligne", v: counts.en_ligne },
-    { k: "Refusées", v: counts.refusee },
+    { k: "Propriétaires", v: accountCounts.proprietaire },
+    { k: "Visiteurs", v: accountCounts.visiteur },
   ];
 
   return (
     <section className="wrap section">
       <p className="eyebrow" style={{ marginBottom: 8 }}>
-        Administration · Modération
+        Administration
       </p>
       <h1 className="display" style={{ fontSize: "clamp(30px, 3.6vw, 44px)", marginBottom: 10 }}>
-        File de validation
+        Vue d&apos;ensemble
       </h1>
       <p style={{ margin: "0 0 32px", color: "var(--muted)", maxWidth: "60ch", lineHeight: 1.7 }}>
         L&apos;identité d&apos;un propriétaire se vérifie une seule fois, avant sa première
-        annonce. Chaque annonce, elle, est contrôlée individuellement : cohérence du loyer et
-        de l&apos;avance, qualité de la description. C&apos;est ce double filtre qui tient les
-        pratiques trompeuses hors du site.
+        annonce. Chaque annonce, elle, est contrôlée individuellement. C&apos;est ce double
+        filtre qui tient les pratiques trompeuses hors du site.
       </p>
+
+      <AdminNav active="/admin" />
 
       <div className="kpi-band" style={{ marginBottom: 38 }}>
         {stats.map((s) => (

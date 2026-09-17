@@ -58,12 +58,16 @@ export default function Nav() {
         ))}
         <span className="nav__sep" aria-hidden="true" />
 
-        <Link
-          href="/espace-proprietaire"
-          aria-current={isActive("/espace-proprietaire") ? "page" : undefined}
-        >
-          Espace propriétaire
-        </Link>
+        {status === "authenticated" && (
+          <Link
+            href="/mon-espace"
+            aria-current={
+              isActive("/espace-proprietaire") || isActive("/espace-visiteur") ? "page" : undefined
+            }
+          >
+            Mon espace
+          </Link>
+        )}
 
         {session?.user.role === "admin" && (
           <Link href="/admin" aria-current={isActive("/admin") ? "page" : undefined}>

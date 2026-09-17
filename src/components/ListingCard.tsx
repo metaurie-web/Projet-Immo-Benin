@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Listing } from "@/lib/types";
 import { fcfa, plural } from "@/lib/format";
 import ListingPhoto from "@/components/ListingPhoto";
+import FavoriteButton from "@/components/FavoriteButton";
 
 export default function ListingCard({ listing }: { listing: Listing }) {
   const l = listing;
@@ -24,9 +25,16 @@ export default function ListingCard({ listing }: { listing: Listing }) {
         </p>
         <div className="listing-card__foot">
           <span className="tag">Propriétaire vérifié</span>
-          <Link className="link-underline" href={`/annonces/${l.ref}`}>
-            Détails
-          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <FavoriteButton
+              listingRef={l.ref}
+              initialFavorited={l.isFavorite ?? false}
+              compact
+            />
+            <Link className="link-underline" href={`/annonces/${l.ref}`}>
+              Détails
+            </Link>
+          </div>
         </div>
       </div>
     </article>

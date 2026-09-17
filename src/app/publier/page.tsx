@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { getSettings } from "@/lib/settings";
 import PublierWizard from "@/components/PublierWizard";
 
 export const metadata: Metadata = {
@@ -19,5 +20,7 @@ export default async function PublierPage() {
     redirect("/verification-identite?callbackUrl=/publier");
   }
 
-  return <PublierWizard />;
+  const { commissionAmount } = await getSettings();
+
+  return <PublierWizard commission={commissionAmount} />;
 }

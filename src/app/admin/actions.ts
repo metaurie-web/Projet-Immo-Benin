@@ -3,9 +3,27 @@
 import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { setListingStatus } from "@/lib/data";
 import { setVerificationStatus } from "@/lib/verification";
-import type { ListingStatus } from "@/lib/types";
+import { setUserRole, deleteAccount } from "@/lib/users";
+import { setCommission } from "@/lib/settings";
+import type { ListingStatus, UserRole } from "@/lib/types";
+
+export type ModerationResult = { ok: true } | { ok: false; error: string };
+
+/** Vrai seulement si la personne connectée est administratrice. Toute
+ *  action de ce fichier repasse par ici : une action serveur est un point
+ *  d'entrée public, la vérifier au niveau de la page ne suffit pas. */
+async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.role !== "admin") return null;
+  return session;
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Annonces                                                               */
+/* ---------------------------------------------------------------------- */
 
 export type ModerationOutcome = "valid" | "fix" | "reject";
 
@@ -15,58 +33,173 @@ const OUTCOME_TO_STATUS: Record<ModerationOutcome, ListingStatus> = {
   reject: "refusee",
 };
 
-export type ModerationResult = { ok: true } | { ok: false; error: string };
-
-/** Change le statut d'une annonce depuis la file de modération.
- *  Réservé aux comptes dont le rôle est "admin" (vérifié ici, pas seulement
- *  côté page : une action serveur est un point d'entrée public). */
+/** Change le statut d'une annonce depuis la file de modération. */
 export async function moderateListing(
   ref: string,
   outcome: ModerationOutcome,
 ): Promise<ModerationResult> {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "admin") {
-    return { ok: false, error: "Action réservée aux administrateurs." };
-  }
+  if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
 
   await setListingStatus(ref, OUTCOME_TO_STATUS[outcome]);
+  revalidateListingPaths();
+  return { ok: true };
+}
 
-  // Les pages ci-dessous affichent des annonces : on les force à se
-  // recalculer pour refléter le nouveau statut sans attendre.
+/** Change le statut d'une annonce depuis /admin/annonces (n'importe quel statut). */
+export async function setListingStatusAction(
+  ref: string,
+  status: ListingStatus,
+): Promise<ModerationResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
+
+  await setListingStatus(ref, status);
+  revalidateListingPaths();
+  return { ok: true };
+}
+
+/** Supprime définitivement une annonce. */
+export async function deleteListingAction(ref: string): Promise<ModerationResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
+
+  await prisma.listing.delete({ where: { ref } });
+  revalidateListingPaths();
+  revalidatePath("/admin/annonces");
+  return { ok: true };
+}
+
+export type UpdateListingInput = {
+  title: string;
+  price: number;
+  description: string;
+  featured: boolean;
+  status: ListingStatus;
+};
+
+/** Modifie les champs d'une annonce depuis /admin/annonces/[ref]/modifier. */
+export async function updateListingAction(
+  ref: string,
+  input: UpdateListingInput,
+): Promise<ModerationResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
+
+  if (input.title.trim().length < 6) {
+    return { ok: false, error: "Le titre est trop court." };
+  }
+  if (input.price < 5000) {
+    return { ok: false, error: "Loyer trop faible." };
+  }
+  if (input.description.trim().length < 30) {
+    return { ok: false, error: "La description est trop courte." };
+  }
+
+  await prisma.listing.update({
+    where: { ref },
+    data: {
+      title: input.title.trim(),
+      price: input.price,
+      description: input.description.trim(),
+      featured: input.featured,
+      status: input.status,
+    },
+  });
+  revalidateListingPaths();
+  revalidatePath("/admin/annonces");
+  return { ok: true };
+}
+
+function revalidateListingPaths() {
   revalidatePath("/admin");
   revalidatePath("/annonces");
   revalidatePath("/");
   revalidatePath("/espace-proprietaire");
-
-  return { ok: true };
 }
+
+/* ---------------------------------------------------------------------- */
+/*  Vérification d'identité                                                */
+/* ---------------------------------------------------------------------- */
 
 export type VerificationOutcome = "valid" | "reject";
 
 const REJECT_NOTE =
   "Document illisible ou incomplet — réessaie avec une pièce d'identité nette et à jour.";
 
-/** Valide ou refuse la vérification d'identité d'un compte propriétaire.
- *  Réservé aux comptes dont le rôle est "admin" (vérifié ici, pas seulement
- *  côté page). */
+/** Valide ou refuse la vérification d'identité d'un compte. Une validation
+ *  promeut aussi le compte au rôle "proprietaire" — c'est le seul chemin
+ *  normal pour le devenir. */
 export async function moderateVerification(
   userId: string,
   outcome: VerificationOutcome,
 ): Promise<ModerationResult> {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== "admin") {
-    return { ok: false, error: "Action réservée aux administrateurs." };
-  }
+  if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
 
   await setVerificationStatus(
     userId,
     outcome === "valid" ? "verifie" : "refuse",
     outcome === "reject" ? REJECT_NOTE : undefined,
   );
+  if (outcome === "valid") {
+    await prisma.user.updateMany({
+      where: { id: userId, role: "visiteur" },
+      data: { role: "proprietaire" },
+    });
+  }
 
   revalidatePath("/admin");
+  revalidatePath("/admin/proprietaires");
+  revalidatePath("/admin/visiteurs");
   revalidatePath("/verification-identite");
   revalidatePath("/publier");
+  return { ok: true };
+}
 
+/* ---------------------------------------------------------------------- */
+/*  Comptes (propriétaires et visiteurs)                                   */
+/* ---------------------------------------------------------------------- */
+
+/** Change le rôle d'un compte à la main (promotion ou rétrogradation). */
+export async function changeUserRoleAction(
+  userId: string,
+  role: UserRole,
+): Promise<ModerationResult> {
+  const session = await requireAdmin();
+  if (!session) return { ok: false, error: "Action réservée aux administrateurs." };
+  if (userId === session.user.id) {
+    return { ok: false, error: "Impossible de changer ton propre rôle depuis ici." };
+  }
+
+  await setUserRole(userId, role);
+  revalidatePath("/admin/proprietaires");
+  revalidatePath("/admin/visiteurs");
+  return { ok: true };
+}
+
+/** Supprime un compte (propriétaire ou visiteur). */
+export async function deleteAccountAction(userId: string): Promise<ModerationResult> {
+  const session = await requireAdmin();
+  if (!session) return { ok: false, error: "Action réservée aux administrateurs." };
+  if (userId === session.user.id) {
+    return { ok: false, error: "Impossible de supprimer ton propre compte depuis ici." };
+  }
+
+  await deleteAccount(userId);
+  revalidatePath("/admin/proprietaires");
+  revalidatePath("/admin/visiteurs");
+  revalidatePath("/espace-proprietaire");
+  return { ok: true };
+}
+
+/* ---------------------------------------------------------------------- */
+/*  Réglages généraux                                                      */
+/* ---------------------------------------------------------------------- */
+
+export async function updateCommissionAction(amount: number): Promise<ModerationResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
+  if (!Number.isFinite(amount) || amount < 0) {
+    return { ok: false, error: "Montant invalide." };
+  }
+
+  await setCommission(Math.round(amount));
+  revalidatePath("/admin/parametres");
+  revalidatePath("/publier");
   return { ok: true };
 }

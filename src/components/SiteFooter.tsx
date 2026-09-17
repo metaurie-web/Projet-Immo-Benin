@@ -16,7 +16,7 @@ export default function SiteFooter() {
         <nav className="site-footer__links" aria-label="Liens de pied de page">
           <Link href="/annonces">Annonces</Link>
           <Link href="/publier">Publier un bien</Link>
-          <Link href="/espace-proprietaire">Espace propriétaire</Link>
+          <Link href="/mon-espace">Mon espace</Link>
           <Link href="/#faq">Questions fréquentes</Link>
           <Link href="/admin">Administration</Link>
         </nav>

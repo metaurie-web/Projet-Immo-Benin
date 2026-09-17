@@ -6,6 +6,9 @@
 export type PropertyType = "Chambre-salon" | "Appartement" | "Maison basse" | "Villa";
 export type MeterKind = "individuel" | "partagé";
 
+/** Le rôle d'un compte : détermine son espace (voir /mon-espace). */
+export type UserRole = "visiteur" | "proprietaire" | "admin";
+
 /** Cycle de vie d'une annonce, de son dépôt à sa mise en ligne. */
 export type ListingStatus =
   | "en_attente"
@@ -60,6 +63,8 @@ export interface Listing {
   totalIn: number;
   reviewList: Review[];
   createdAt: Date;
+  /** true/false si on sait qui regarde (visiteur connecté), sinon absent. */
+  isFavorite?: boolean;
 }
 
 export interface City {
