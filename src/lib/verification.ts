@@ -23,18 +23,25 @@ export async function getPendingVerifications(): Promise<PendingVerification[]> 
   });
 }
 
-/** Change le statut de vérification d'un compte (utilisé par l'admin). */
+/** Change le statut de vérification d'un compte (utilisé par l'admin).
+ *
+ *  N'agit que si le compte est encore "en_attente" (vérification atomique
+ *  côté base, via `updateMany` + son compte de lignes touchées) : un
+ *  double clic ou un second clic sur une page restée ouverte ne retraite
+ *  donc jamais la même demande deux fois. Renvoie `true` si un compte a
+ *  bien été mis à jour, `false` si la demande avait déjà été traitée. */
 export async function setVerificationStatus(
   userId: string,
   status: VerificationStatus,
   note?: string,
-): Promise<void> {
-  await prisma.user.update({
-    where: { id: userId },
+): Promise<boolean> {
+  const result = await prisma.user.updateMany({
+    where: { id: userId, verificationStatus: "en_attente" },
     data: {
       verificationStatus: status,
       verificationNote: note ?? null,
       verifiedAt: status === "verifie" ? new Date() : null,
     },
   });
+  return result.count > 0;
 }

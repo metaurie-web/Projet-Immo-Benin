@@ -109,6 +109,65 @@ export async function sendMagicLinkEmail({ to, url }: { to: string; url: string 
 }
 
 /* ---------------------------------------------------------------------- */
+/*  Vérification d'identité                                                */
+/* ---------------------------------------------------------------------- */
+
+/** Au propriétaire, quand l'admin valide sa vérification d'identité. */
+export async function sendVerificationApprovedEmail({
+  to,
+  connexionUrl,
+}: {
+  to: string;
+  connexionUrl: string;
+}) {
+  await sendEmail({
+    to,
+    subject: "Identité vérifiée — Mon Appart",
+    fallbackLines: [`Connexion : ${connexionUrl}`],
+    html: shell(`
+      <p style="font-size: 15px; line-height: 1.65; color: #3c4046; margin: 0 0 8px;">
+        Bonne nouvelle : votre identité a été vérifiée. Votre espace propriétaire est
+        maintenant activé, vous pouvez publier vos annonces sur Mon Appart.
+      </p>
+      <p style="font-size: 13px; line-height: 1.6; color: #6b7076; margin: 0 0 28px;">
+        Pas de mot de passe à retenir : connectez-vous avec votre adresse email, un lien de
+        connexion à usage unique vous est envoyé à chaque fois.
+      </p>
+      ${button("Me connecter", connexionUrl)}
+    `),
+  });
+}
+
+/** Au propriétaire, quand l'admin refuse sa vérification d'identité. */
+export async function sendVerificationRejectedEmail({
+  to,
+  note,
+  retryUrl,
+}: {
+  to: string;
+  note: string;
+  retryUrl: string;
+}) {
+  await sendEmail({
+    to,
+    subject: "Vérification d'identité non retenue — Mon Appart",
+    fallbackLines: [`Raison : ${note}`, `Réessayer : ${retryUrl}`],
+    html: shell(`
+      <p style="font-size: 15px; line-height: 1.65; color: #3c4046; margin: 0 0 8px;">
+        Votre demande de vérification d'identité n'a pas été retenue.
+      </p>
+      <p style="font-size: 14px; line-height: 1.6; color: #3c4046; margin: 0 0 24px;">
+        Raison : ${note}
+      </p>
+      <p style="font-size: 13px; line-height: 1.6; color: #6b7076; margin: 0 0 28px;">
+        Vous pouvez déposer un nouveau document à tout moment.
+      </p>
+      ${button("Réessayer", retryUrl)}
+    `),
+  });
+}
+
+/* ---------------------------------------------------------------------- */
 /*  Demandes de visite                                                     */
 /* ---------------------------------------------------------------------- */
 

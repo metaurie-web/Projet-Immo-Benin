@@ -8,7 +8,10 @@ import { setListingStatus } from "@/lib/data";
 import { setVerificationStatus } from "@/lib/verification";
 import { setUserRole, deleteAccount } from "@/lib/users";
 import { setCommission } from "@/lib/settings";
+import { sendVerificationApprovedEmail, sendVerificationRejectedEmail } from "@/lib/mail";
 import type { ListingStatus, UserRole } from "@/lib/types";
+
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
 export type ModerationResult = { ok: true } | { ok: false; error: string };
 
@@ -125,18 +128,25 @@ const REJECT_NOTE =
 
 /** Valide ou refuse la vérification d'identité d'un compte. Une validation
  *  promeut aussi le compte au rôle "proprietaire" — c'est le seul chemin
- *  normal pour le devenir. */
+ *  normal pour le devenir. Envoie ensuite un email de décision au compte
+ *  concerné (réutilise l'infrastructure d'envoi existante, src/lib/mail.ts) :
+ *  un échec d'envoi est journalisé mais ne fait pas échouer l'action, le
+ *  statut en base reste la source de vérité. */
 export async function moderateVerification(
   userId: string,
   outcome: VerificationOutcome,
 ): Promise<ModerationResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
 
-  await setVerificationStatus(
+  const updated = await setVerificationStatus(
     userId,
     outcome === "valid" ? "verifie" : "refuse",
     outcome === "reject" ? REJECT_NOTE : undefined,
   );
+  if (!updated) {
+    return { ok: false, error: "Cette demande a déjà été traitée." };
+  }
+
   if (outcome === "valid") {
     await prisma.user.updateMany({
       where: { id: userId, role: "visiteur" },
@@ -149,6 +159,24 @@ export async function moderateVerification(
   revalidatePath("/admin/visiteurs");
   revalidatePath("/verification-identite");
   revalidatePath("/publier");
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  if (user?.email) {
+    try {
+      if (outcome === "valid") {
+        await sendVerificationApprovedEmail({ to: user.email, connexionUrl: `${siteUrl}/connexion` });
+      } else {
+        await sendVerificationRejectedEmail({
+          to: user.email,
+          note: REJECT_NOTE,
+          retryUrl: `${siteUrl}/verification-identite`,
+        });
+      }
+    } catch (err) {
+      console.error("Échec de l'envoi de l'email de décision de vérification :", err);
+    }
+  }
+
   return { ok: true };
 }
 

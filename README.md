@@ -407,7 +407,16 @@ non_verifie  →  en_attente  →  verifie   (peut publier, définitivement)
   encore `"verifie"` — voir `src/app/publier/page.tsx`
 - `/admin` liste les vérifications en attente (`getPendingVerifications()`,
   `src/lib/verification.ts`) ; Valider / Refuser appellent
-  `moderateVerification()` (`src/app/admin/actions.ts`)
+  `moderateVerification()` (`src/app/admin/actions.ts`), qui envoie ensuite
+  un email de décision (`sendVerificationApprovedEmail()` /
+  `sendVerificationRejectedEmail()`, `src/lib/mail.ts` — même
+  infrastructure que le lien magique, voir § 8). `setVerificationStatus()`
+  (`src/lib/verification.ts`) ne change le statut que si le compte est
+  encore `en_attente` (vérification atomique en base) : un double clic ou
+  une page restée ouverte ne retraite jamais la même demande deux fois, et
+  ne renvoie donc jamais deux emails. Un échec d'envoi est journalisé côté
+  serveur (`console.error`) sans faire échouer la décision elle-même — le
+  statut en base reste la source de vérité
 - Le document est stocké dans un store Blob **PRIVÉ**, distinct de celui des
   photos (`BLOB_PRIVATE_READ_WRITE_TOKEN`). Contrairement aux photos (store
   public, upload direct navigateur → Blob), un store privé n'accepte pas
