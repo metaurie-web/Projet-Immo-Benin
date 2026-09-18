@@ -26,7 +26,10 @@ const body = Lora({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  // `||` et non `??` : une variable d'environnement définie mais VIDE
+  // (chaîne "") sur Vercel doit aussi retomber sur la valeur par défaut,
+  // sinon `new URL("")` fait planter le build ("Invalid URL").
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
   title: {
     default: "Mon Appart — Louer chez son propriétaire, sans démarcheur · Bénin",
     template: "%s — Mon Appart",
