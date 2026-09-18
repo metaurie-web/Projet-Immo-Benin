@@ -41,11 +41,40 @@ const OUTCOME_TO_STATUS: Record<ModerationOutcome, ListingStatus> = {
   reject: "refusee",
 };
 
-/** Change le statut d'une annonce depuis la file de modération. Pour une
- *  validation ou un refus, envoie ensuite un email au propriétaire (même
- *  infrastructure que la vérification d'identité, voir moderateVerification
- *  plus bas) : un échec d'envoi est journalisé mais ne fait pas échouer la
- *  décision, le statut en base reste la source de vérité. */
+/** Email de décision au propriétaire d'une annonce (validation ou refus) —
+ *  partagé par moderateListing() et setListingStatusAction() ci-dessous,
+ *  pour que les deux pages admin capables de valider/refuser une annonce
+ *  (la file de modération sur /admin, et l'éditeur libre sur
+ *  /admin/annonces) déclenchent exactement le même email. Un échec
+ *  d'envoi est journalisé mais ne fait pas échouer la décision, le statut
+ *  en base reste la source de vérité. */
+async function sendListingDecisionEmail(ref: string, outcome: "valid" | "reject") {
+  const listing = await prisma.listing.findUnique({
+    where: { ref },
+    select: { title: true, ownerAccount: { select: { email: true } } },
+  });
+  if (!listing?.ownerAccount?.email) return;
+
+  try {
+    if (outcome === "valid") {
+      await sendListingApprovedEmail({
+        to: listing.ownerAccount.email,
+        listingTitle: listing.title,
+        listingUrl: `${siteUrl}/annonces/${ref}`,
+      });
+    } else {
+      await sendListingRejectedEmail({
+        to: listing.ownerAccount.email,
+        listingTitle: listing.title,
+        dashboardUrl: `${siteUrl}/espace-proprietaire`,
+      });
+    }
+  } catch (err) {
+    console.error("Échec de l'envoi de l'email de décision de modération :", err);
+  }
+}
+
+/** Change le statut d'une annonce depuis la file de modération. */
 export async function moderateListing(
   ref: string,
   outcome: ModerationOutcome,
@@ -59,40 +88,37 @@ export async function moderateListing(
   revalidateListingPaths();
 
   if (outcome === "valid" || outcome === "reject") {
-    const listing = await prisma.listing.findUnique({
-      where: { ref },
-      select: { title: true, ownerAccount: { select: { email: true } } },
-    });
-    if (listing?.ownerAccount?.email) {
-      try {
-        if (outcome === "valid") {
-          await sendListingApprovedEmail({
-            to: listing.ownerAccount.email,
-            listingTitle: listing.title,
-            listingUrl: `${siteUrl}/annonces/${ref}`,
-          });
-        } else {
-          await sendListingRejectedEmail({
-            to: listing.ownerAccount.email,
-            listingTitle: listing.title,
-            dashboardUrl: `${siteUrl}/espace-proprietaire`,
-          });
-        }
-      } catch (err) {
-        console.error("Échec de l'envoi de l'email de décision de modération :", err);
-      }
-    }
+    await sendListingDecisionEmail(ref, outcome);
   }
 
   return { ok: true };
 }
 
-/** Change le statut d'une annonce depuis /admin/annonces (n'importe quel statut). */
+/** Change le statut d'une annonce depuis /admin/annonces (n'importe quel
+ *  statut, sur n'importe quelle annonce — l'éditeur libre, pas réservé aux
+ *  annonces en attente). Si ce changement fait passer une annonce ENCORE
+ *  "en_attente" à "en_ligne" ou "refusee", c'est la même décision de
+ *  modération que sur /admin : même garde anti double-traitement, même
+ *  email au propriétaire (voir sendListingDecisionEmail ci-dessus). Pour
+ *  toute autre annonce ou tout autre statut, comportement inchangé :
+ *  changement direct, sans condition ni email. */
 export async function setListingStatusAction(
   ref: string,
   status: ListingStatus,
 ): Promise<ModerationResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
+
+  if (status === "en_ligne" || status === "refusee") {
+    const updated = await setPendingListingStatus(ref, status);
+    if (updated) {
+      revalidateListingPaths();
+      await sendListingDecisionEmail(ref, status === "en_ligne" ? "valid" : "reject");
+      return { ok: true };
+    }
+    // L'annonce n'était pas (plus) "en_attente" : pas une décision de
+    // modération (ex. republier une annonce expirée) — on applique le
+    // changement normalement, sans email, comme avant ce correctif.
+  }
 
   await setListingStatus(ref, status);
   revalidateListingPaths();

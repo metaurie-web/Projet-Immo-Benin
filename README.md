@@ -346,14 +346,19 @@ en_attente  →  en_ligne              (visible sur /annonces et sa fiche)
 - `/admin` (rôle `admin` requis) lit la vraie file d'attente
   (`getPendingListings()`) ; les boutons Valider / Demander une correction /
   Refuser appellent `moderateListing()` (`src/app/admin/actions.ts`) qui
-  change le statut en base. `setPendingListingStatus()`
+  change le statut en base. `/admin/annonces` (éditeur libre, toutes les
+  annonces quel que soit leur statut) peut **aussi** valider ou refuser une
+  annonce encore `en_attente`, via `setListingStatusAction()` — les deux
+  pages partagent la même logique de décision (`sendListingDecisionEmail()`),
+  pour qu'un email parte au propriétaire **quelle que soit la page utilisée
+  par l'admin** pour valider ou refuser. `setPendingListingStatus()`
   (`src/lib/data.ts`) ne l'applique que si l'annonce est encore
-  `en_attente` (vérification atomique) : un double clic ne la retraite
-  jamais deux fois. Pour une validation ou un refus, un email part ensuite
-  au propriétaire (`sendListingApprovedEmail()` / `sendListingRejectedEmail()`,
-  `src/lib/mail.ts`, même infrastructure Brevo que le reste — un échec
-  d'envoi est journalisé sans faire échouer la décision). Rien n'est envoyé
-  pour "Demander une correction"
+  `en_attente` (vérification atomique) : un double clic — depuis l'une ou
+  l'autre page, ou entre les deux — ne la retraite jamais deux fois. Un
+  échec d'envoi est journalisé sans faire échouer la décision. Rien n'est
+  envoyé pour "Demander une correction", ni pour un changement de statut
+  qui ne part pas de `en_attente` (ex. republier une annonce expirée
+  depuis `/admin/annonces`)
 - `getAllListings()`, `getFeaturedListings()` et `getListing()` ne renvoient
   que les annonces `en_ligne` : c'est ce qui rend une annonce invisible du
   public tant qu'elle n'est pas validée
