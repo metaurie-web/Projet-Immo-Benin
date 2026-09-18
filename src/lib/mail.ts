@@ -109,6 +109,60 @@ export async function sendMagicLinkEmail({ to, url }: { to: string; url: string 
 }
 
 /* ---------------------------------------------------------------------- */
+/*  Modération d'une annonce                                               */
+/* ---------------------------------------------------------------------- */
+
+/** Au propriétaire, quand l'admin valide son annonce. */
+export async function sendListingApprovedEmail({
+  to,
+  listingTitle,
+  listingUrl,
+}: {
+  to: string;
+  listingTitle: string;
+  listingUrl: string;
+}) {
+  await sendEmail({
+    to,
+    subject: `Annonce validée — ${listingTitle}`,
+    fallbackLines: [`Annonce : ${listingTitle}`, `Voir l'annonce : ${listingUrl}`],
+    html: shell(`
+      <p style="font-size: 15px; line-height: 1.65; color: #3c4046; margin: 0 0 8px;">
+        Bonne nouvelle : votre annonce <strong>${listingTitle}</strong> a été validée et
+        publiée sur Mon Appart. Elle est maintenant visible par tous les visiteurs.
+      </p>
+      ${button("Voir mon annonce", listingUrl)}
+    `),
+  });
+}
+
+/** Au propriétaire, quand l'admin refuse son annonce. */
+export async function sendListingRejectedEmail({
+  to,
+  listingTitle,
+  dashboardUrl,
+}: {
+  to: string;
+  listingTitle: string;
+  dashboardUrl: string;
+}) {
+  await sendEmail({
+    to,
+    subject: `Annonce non retenue — ${listingTitle}`,
+    fallbackLines: [`Annonce : ${listingTitle}`, `Mon espace : ${dashboardUrl}`],
+    html: shell(`
+      <p style="font-size: 15px; line-height: 1.65; color: #3c4046; margin: 0 0 8px;">
+        Votre annonce <strong>${listingTitle}</strong> n'a pas été retenue lors du contrôle.
+      </p>
+      <p style="font-size: 13px; line-height: 1.6; color: #6b7076; margin: 0 0 28px;">
+        Vous pouvez la modifier et la publier à nouveau depuis votre espace propriétaire.
+      </p>
+      ${button("Accéder à mon espace", dashboardUrl)}
+    `),
+  });
+}
+
+/* ---------------------------------------------------------------------- */
 /*  Vérification d'identité                                                */
 /* ---------------------------------------------------------------------- */
 

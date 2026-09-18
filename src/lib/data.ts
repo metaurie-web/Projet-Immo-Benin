@@ -215,7 +215,23 @@ export async function getListingStatusCounts(): Promise<Record<ListingStatus, nu
   return counts;
 }
 
-/** Fait passer une annonce à un nouveau statut (utilisé par la modération admin). */
+/** Fait passer une annonce à un nouveau statut (éditeur libre, /admin/annonces). */
 export async function setListingStatus(ref: string, status: ListingStatus): Promise<void> {
   await prisma.listing.update({ where: { ref }, data: { status } });
+}
+
+/** Fait passer une annonce ENCORE "en_attente" vers un nouveau statut —
+ *  utilisé par la file de modération (moderateListing()). Vérification
+ *  atomique en base (`updateMany` + compte de lignes touchées) : un double
+ *  clic ou une page restée ouverte ne retraite jamais deux fois la même
+ *  annonce. Renvoie `true` si l'annonce a bien été mise à jour. */
+export async function setPendingListingStatus(
+  ref: string,
+  status: ListingStatus,
+): Promise<boolean> {
+  const result = await prisma.listing.updateMany({
+    where: { ref, status: "en_attente" },
+    data: { status },
+  });
+  return result.count > 0;
 }

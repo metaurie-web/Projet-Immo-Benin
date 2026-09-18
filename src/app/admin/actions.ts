@@ -4,11 +4,16 @@ import { getServerSession } from "next-auth";
 import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { setListingStatus } from "@/lib/data";
+import { setListingStatus, setPendingListingStatus } from "@/lib/data";
 import { setVerificationStatus } from "@/lib/verification";
 import { setUserRole, deleteAccount } from "@/lib/users";
 import { setCommission } from "@/lib/settings";
-import { sendVerificationApprovedEmail, sendVerificationRejectedEmail } from "@/lib/mail";
+import {
+  sendVerificationApprovedEmail,
+  sendVerificationRejectedEmail,
+  sendListingApprovedEmail,
+  sendListingRejectedEmail,
+} from "@/lib/mail";
 import type { ListingStatus, UserRole } from "@/lib/types";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -36,15 +41,49 @@ const OUTCOME_TO_STATUS: Record<ModerationOutcome, ListingStatus> = {
   reject: "refusee",
 };
 
-/** Change le statut d'une annonce depuis la file de modération. */
+/** Change le statut d'une annonce depuis la file de modération. Pour une
+ *  validation ou un refus, envoie ensuite un email au propriétaire (même
+ *  infrastructure que la vérification d'identité, voir moderateVerification
+ *  plus bas) : un échec d'envoi est journalisé mais ne fait pas échouer la
+ *  décision, le statut en base reste la source de vérité. */
 export async function moderateListing(
   ref: string,
   outcome: ModerationOutcome,
 ): Promise<ModerationResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Action réservée aux administrateurs." };
 
-  await setListingStatus(ref, OUTCOME_TO_STATUS[outcome]);
+  const updated = await setPendingListingStatus(ref, OUTCOME_TO_STATUS[outcome]);
+  if (!updated) {
+    return { ok: false, error: "Cette annonce a déjà été traitée." };
+  }
   revalidateListingPaths();
+
+  if (outcome === "valid" || outcome === "reject") {
+    const listing = await prisma.listing.findUnique({
+      where: { ref },
+      select: { title: true, ownerAccount: { select: { email: true } } },
+    });
+    if (listing?.ownerAccount?.email) {
+      try {
+        if (outcome === "valid") {
+          await sendListingApprovedEmail({
+            to: listing.ownerAccount.email,
+            listingTitle: listing.title,
+            listingUrl: `${siteUrl}/annonces/${ref}`,
+          });
+        } else {
+          await sendListingRejectedEmail({
+            to: listing.ownerAccount.email,
+            listingTitle: listing.title,
+            dashboardUrl: `${siteUrl}/espace-proprietaire`,
+          });
+        }
+      } catch (err) {
+        console.error("Échec de l'envoi de l'email de décision de modération :", err);
+      }
+    }
+  }
+
   return { ok: true };
 }
 
