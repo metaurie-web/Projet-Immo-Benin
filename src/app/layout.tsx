@@ -34,7 +34,8 @@ export const metadata: Metadata = {
   description:
     "Mon Appart réunit les appartements et maisons à louer à Cotonou, Abomey-Calavi, Porto-Novo et Ouidah, " +
     "publiés par les propriétaires eux-mêmes. Loyer, avance et caution affichés avant la visite.",
-  icons: { icon: "/favicon.svg" },
+  // Favicon et icône iOS détectés automatiquement par Next.js depuis
+  // src/app/icon.png et src/app/apple-icon.png — rien à déclarer ici.
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

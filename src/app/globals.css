@@ -182,24 +182,18 @@ h3.display  { font-size: clamp(24px, 2.6vw, 34px); line-height: 1.12; }
 }
 .brand {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
   text-decoration: none;
   color: inherit;
 }
 .brand:hover { color: inherit; }
-.brand__name {
-  font-family: var(--font-display);
-  font-size: 27px;
-  line-height: 1;
-  letter-spacing: -0.015em;
+.brand__logo {
+  height: 46px;
+  width: auto;
 }
-.brand__tag {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--deep);
+.brand__logo--footer {
+  height: 40px;
+  width: auto;
 }
 
 .nav {

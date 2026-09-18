@@ -136,11 +136,12 @@ mon-appart/
 │  ├─ seed.mjs           Insère les 12 annonces de démonstration
 │  ├─ make-admin.mjs     Donne le rôle admin à un compte (par email)
 │  └─ dev.db             La base SQLite locale (ignorée par git)
-├─ public/               Fichiers servis tels quels (favicon…)
+├─ public/               Fichiers servis tels quels (logo.png…)
 └─ src/
    ├─ app/               Les pages (routage par dossier)
    │  ├─ layout.tsx              En-tête + pied de page communs à toutes les pages
    │  ├─ globals.css             Le design system (repris du site statique)
+   │  ├─ icon.png / apple-icon.png  Favicon (détecté automatiquement par Next.js)
    │  ├─ page.tsx                Accueil            → /
    │  ├─ not-found.tsx           Page 404
    │  ├─ connexion/

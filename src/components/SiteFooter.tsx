@@ -1,4 +1,6 @@
+import Image from "next/image";
 import Link from "next/link";
+import logo from "../../public/logo.png";
 
 export default function SiteFooter() {
   const year = new Date().getFullYear();
@@ -7,10 +9,8 @@ export default function SiteFooter() {
     <footer className="site-footer">
       <div className="site-footer__top">
         <div>
-          <p className="brand__name" style={{ fontSize: 22 }}>
-            Mon Appart
-          </p>
-          <p style={{ marginTop: 6 }}>Cotonou · Abomey-Calavi · Porto-Novo · Ouidah</p>
+          <Image src={logo} alt="Mon Appart" className="brand__logo--footer" />
+          <p style={{ marginTop: 10 }}>Cotonou · Abomey-Calavi · Porto-Novo · Ouidah</p>
           <p>Location directe, sans frais de démarcheur.</p>
         </div>
         <nav className="site-footer__links" aria-label="Liens de pied de page">
