@@ -54,17 +54,20 @@ main). Ça peut prendre une à deux minutes la première fois.
 
 ## 3. Préparer la base de données (à faire une seule fois)
 
-Le projet utilise **SQLite** en local : la base est un simple fichier,
-`prisma/dev.db`, créé par les commandes ci-dessous. Rien à installer.
+Le projet utilise **PostgreSQL** (par exemple [Neon](https://neon.tech),
+gratuit) — y compris en local : crée une base dédiée au développement,
+**séparée de celle de production**, pour ne jamais mélanger tes tests avec
+de vraies données.
 
 ```powershell
 Copy-Item .env.example .env
+# Renseigne DATABASE_URL et DIRECT_URL dans .env avec ta base de dev
 npm run db:migrate
 npm run db:seed
 ```
 
-- `Copy-Item .env.example .env` crée le fichier `.env` avec `DATABASE_URL="file:./dev.db"`
-- `npm run db:migrate` crée les tables (`Listing`, `Review`) dans `prisma/dev.db`
+- `Copy-Item .env.example .env` crée le fichier `.env` à remplir
+- `npm run db:migrate` crée les tables dans ta base de dev
 - `npm run db:seed` y insère les 12 annonces de démonstration
 
 Pour **repartir de zéro** (vider et re-remplir la base) : `npm run db:reset`.
@@ -134,8 +137,7 @@ mon-appart/
 │  ├─ schema.prisma      Description des tables de la base de données
 │  ├─ migrations/        Historique des changements de schéma (à committer)
 │  ├─ seed.mjs           Insère les 12 annonces de démonstration
-│  ├─ make-admin.mjs     Donne le rôle admin à un compte (par email)
-│  └─ dev.db             La base SQLite locale (ignorée par git)
+│  └─ make-admin.mjs     Donne le rôle admin à un compte (par email)
 ├─ public/               Fichiers servis tels quels (logo.png…)
 └─ src/
    ├─ app/               Les pages (routage par dossier)
@@ -245,13 +247,20 @@ mon-appart/
 
 ---
 
-## 7. La base de données (Prisma)
+## 7. La base de données (Prisma + PostgreSQL)
 
 **Prisma** est l'outil qui parle à la base en TypeScript. Le principe :
 
 1. On décrit les tables dans `prisma/schema.prisma`
-2. `npm run db:migrate` applique les changements à la vraie base
+2. `npm run db:migrate` applique les changements à la vraie base (en local) ;
+   `prisma migrate deploy` fait de même en production — lancé automatiquement
+   à chaque déploiement Vercel, voir `package.json` (`"build"`)
 3. Dans le code, on écrit `prisma.listing.findMany()` etc. — jamais de SQL à la main
+
+`DATABASE_URL` (connexion "pooled") et `DIRECT_URL` (connexion directe,
+réservée aux commandes `prisma migrate` — le pooling gêne les opérations de
+schéma) pointent toutes les deux la même base ; Neon fournit les deux formes
+séparément dans son tableau de bord.
 
 Voir et modifier les données à la souris, dans le navigateur :
 
@@ -597,7 +606,7 @@ client, falsifiable depuis le navigateur :
 | Commande | Effet |
 |---|---|
 | `npm run dev` | Lance le site en développement (rechargement auto) |
-| `npm run build` | Fabrique la version optimisée pour la mise en ligne |
+| `npm run build` | Applique les migrations en attente (`prisma migrate deploy`) puis fabrique la version optimisée |
 | `npm start` | Lance la version fabriquée par `build` |
 | `npm run lint` | Vérifie le style du code |
 | `npm run db:migrate` | Applique les changements de `schema.prisma` à la base |

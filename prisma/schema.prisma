@@ -8,8 +8,14 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // DATABASE_URL : connexion "pooled" (via pgbouncer), utilisée par
+  // l'application au quotidien. DIRECT_URL : connexion directe, réservée
+  // aux commandes `prisma migrate` — le pooling gêne les opérations de
+  // schéma (verrous, transactions longues). Les deux pointent la même
+  // base, Neon fournit les deux formes dans son tableau de bord.
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 /// Une annonce de logement à louer.
