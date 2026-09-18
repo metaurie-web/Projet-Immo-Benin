@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Listing } from "@/lib/types";
 import type { Slot } from "@/lib/visits";
 import { submitVisitRequest } from "@/app/annonces/[ref]/visite/actions";
+import { VISIT_FEE_FCFA } from "@/lib/payments";
+import { fcfa } from "@/lib/format";
+import { useKkiapayListeners } from "@/lib/useKkiapayListeners";
 
-/* Prise de rendez-vous — réelle : la demande est enregistrée en base et un
-   email part au propriétaire (s'il a un compte réel). */
+type PendingRequest = { name: string; phone: string; message?: string; slotLabel: string };
+
+/* Prise de rendez-vous — réelle : payante (200 FCFA, Mobile Money via
+   KKiaPay), la demande n'est enregistrée en base qu'après vérification du
+   paiement côté serveur (voir src/app/annonces/[ref]/visite/actions.ts). */
 export default function VisiteForm({
   listing,
   slots,
@@ -26,28 +32,58 @@ export default function VisiteForm({
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Ce que le widget de paiement doit enregistrer une fois le paiement
+  // confirmé — capturé au moment de l'ouverture, pas relu depuis le state
+  // React dans le listener (qui reste enregistré une seule fois, voir
+  // useEffect ci-dessous : une closure sur `form` y serait obsolète).
+  const pendingRef = useRef<PendingRequest | null>(null);
+
   const label = (i: number) => {
     const s = slots[i];
     return s ? `${s.day} ${s.date}, ${s.time}` : "";
   };
 
-  async function handleSubmit(e: React.FormEvent) {
+  useKkiapayListeners(
+    async (response) => {
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      if (!pending) return;
+
+      const result = await submitVisitRequest(l.ref, { ...pending, transactionId: response.transactionId });
+      setSending(false);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setSent(true);
+    },
+    () => {
+      pendingRef.current = null;
+      setSending(false);
+      setError("Le paiement a échoué ou a été annulé. Réessaie.");
+    },
+  );
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (picked < 0) return;
-    setSending(true);
-    setError(null);
-    const result = await submitVisitRequest(l.ref, {
-      slotLabel: label(picked),
-      name,
-      phone,
-      message: message || undefined,
-    });
-    setSending(false);
-    if (!result.ok) {
-      setError(result.error);
+
+    if (!window.openKkiapayWidget) {
+      setError("Le module de paiement ne s'est pas chargé. Recharge la page et réessaie.");
       return;
     }
-    setSent(true);
+
+    setError(null);
+    setSending(true);
+    pendingRef.current = { name, phone, message: message || undefined, slotLabel: label(picked) };
+
+    window.openKkiapayWidget({
+      amount: VISIT_FEE_FCFA,
+      key: process.env.NEXT_PUBLIC_KKIAPAY_PUBLIC_KEY ?? "",
+      sandbox: process.env.NEXT_PUBLIC_KKIAPAY_SANDBOX !== "false",
+      position: "center",
+      data: JSON.stringify({ listingRef: l.ref }),
+    });
   }
 
   return (
@@ -169,14 +205,14 @@ export default function VisiteForm({
               <p className="h-serif h-serif--22">{picked >= 0 ? label(picked) : "—"}</p>
             </div>
             <button className="btn" type="submit" disabled={sent || sending || picked < 0}>
-              {sending ? "Envoi…" : "Envoyer ma demande"}
+              {sending ? "Paiement en cours…" : `Payer ${fcfa(VISIT_FEE_FCFA)} et envoyer`}
             </button>
           </div>
 
           {sent && (
             <p className="notice" style={{ marginTop: 18 }}>
-              Demande envoyée. Le propriétaire dispose de 24 heures pour confirmer ; vous
-              recevrez un email dès sa réponse. Retrouvez-la aussi dans{" "}
+              Paiement confirmé, demande envoyée. Le propriétaire dispose de 24 heures pour
+              confirmer ; vous recevrez un email dès sa réponse. Retrouvez-la aussi dans{" "}
               <Link href="/espace-visiteur" className="link-underline">
                 votre espace
               </Link>
@@ -187,8 +223,9 @@ export default function VisiteForm({
       )}
 
       <p className="fineprint" style={{ marginTop: 22 }}>
-        Aucune somme n&apos;est à verser avant la visite. Si quelqu&apos;un vous demande de
-        payer pour visiter ce bien, signalez-le : ce n&apos;est pas le propriétaire.
+        Seuls les {fcfa(VISIT_FEE_FCFA)} de frais de prise de rendez-vous, réglés ci-dessus par
+        Mobile Money, sont à payer. Aucune autre somme n&apos;est à verser avant la visite : si
+        le propriétaire vous en demande, signalez-le.
       </p>
     </section>
   );

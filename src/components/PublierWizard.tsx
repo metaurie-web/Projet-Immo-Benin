@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { fcfa, fmt } from "@/lib/format";
 import { publishListing, type PublishInput } from "@/app/publier/actions";
 import PhotoUploadSlot from "@/components/PhotoUploadSlot";
+import { useKkiapayListeners } from "@/lib/useKkiapayListeners";
 
 const PHOTO_LABELS = ["Façade", "Séjour", "Chambre", "Cuisine et douche"] as const;
 
@@ -13,10 +14,9 @@ const PHOTO_LABELS = ["Façade", "Séjour", "Chambre", "Cuisine et douche"] as c
    /verification-identite) — /publier lui-même la suppose déjà acquise, donc
    ce formulaire ne s'occupe plus que du bien à publier.
    Les informations sont réellement enregistrées en base (étape 2, bouton
-   « Publier mon annonce ») : l'annonce part avec le statut « en attente »
-   et n'apparaît publiquement qu'une fois validée depuis /admin.
-   Reste à brancher : le paiement Mobile Money de la commission — la
-   publication est gratuite en attendant. */
+   « Publier mon annonce »), après paiement Mobile Money (KKiaPay) de la
+   commission — voir src/app/publier/actions.ts pour la vérification côté
+   serveur du montant et du statut de la transaction. */
 
 const STEPS = [
   { n: 1, label: "Informations et photos" },
@@ -29,7 +29,12 @@ const WATERS = ["Forage + SONEB", "SONEB", "Forage"] as const;
 const ADVANCES = ["1 mois", "2 mois", "3 mois", "6 mois"] as const;
 const DEPOSITS = ["1 mois", "2 mois", "3 mois"] as const;
 
-const INITIAL_FORM: PublishInput = {
+// Tout PublishInput sauf transactionId, ajouté juste avant l'appel serveur
+// une fois le paiement confirmé — inutile de le porter dans le state du
+// formulaire tant qu'il n'existe pas encore.
+type WizardForm = Omit<PublishInput, "transactionId">;
+
+const INITIAL_FORM: WizardForm = {
   name: "",
   phone: "",
   city: "Cotonou",
@@ -52,12 +57,18 @@ const INITIAL_FORM: PublishInput = {
 export default function PublierWizard({ commission }: { commission: number }) {
   const commissionLabel = fmt(commission);
   const [step, setStep] = useState(1);
-  const [form, setForm] = useState<PublishInput>(INITIAL_FORM);
+  const [form, setForm] = useState<WizardForm>(INITIAL_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishedRef, setPublishedRef] = useState<string | null>(null);
 
-  function set<K extends keyof PublishInput>(key: K, value: PublishInput[K]) {
+  // Snapshot du formulaire au moment de l'ouverture du widget de paiement —
+  // relu par le listener de succès, qui reste enregistré une seule fois
+  // (voir useEffect ci-dessous) et ne doit donc pas fermer sur un `form`
+  // qui aurait changé depuis.
+  const pendingFormRef = useRef<WizardForm | null>(null);
+
+  function set<K extends keyof WizardForm>(key: K, value: WizardForm[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -66,16 +77,44 @@ export default function PublierWizard({ commission }: { commission: number }) {
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  async function handlePublish() {
-    setSubmitting(true);
-    setError(null);
-    const result = await publishListing(form);
-    setSubmitting(false);
-    if (!result.ok) {
-      setError(result.error);
+  useKkiapayListeners(
+    async (response) => {
+      const pending = pendingFormRef.current;
+      pendingFormRef.current = null;
+      if (!pending) return;
+
+      const result = await publishListing({ ...pending, transactionId: response.transactionId });
+      setSubmitting(false);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setPublishedRef(result.ref);
+    },
+    () => {
+      pendingFormRef.current = null;
+      setSubmitting(false);
+      setError("Le paiement a échoué ou a été annulé. Réessaie.");
+    },
+  );
+
+  function handlePublish() {
+    if (!window.openKkiapayWidget) {
+      setError("Le module de paiement ne s'est pas chargé. Recharge la page et réessaie.");
       return;
     }
-    setPublishedRef(result.ref);
+
+    setError(null);
+    setSubmitting(true);
+    pendingFormRef.current = form;
+
+    window.openKkiapayWidget({
+      amount: commission,
+      key: process.env.NEXT_PUBLIC_KKIAPAY_PUBLIC_KEY ?? "",
+      sandbox: process.env.NEXT_PUBLIC_KKIAPAY_SANDBOX !== "false",
+      position: "center",
+      data: JSON.stringify({ purpose: "publication" }),
+    });
   }
 
   const advanceMonths = parseInt(form.advance, 10);
@@ -341,9 +380,9 @@ export default function PublierWizard({ commission }: { commission: number }) {
         <div className="wrap-flex" style={{ gap: 38 }}>
           <div className="grow">
             <p className="prose" style={{ maxWidth: "56ch", marginBottom: 16 }}>
-              La commission de publication sera de {commissionLabel} FCFA par annonce, pour
-              30 jours de visibilité, une fois le paiement Mobile Money branché. En
-              attendant, la publication est <strong>gratuite</strong>.
+              La commission de publication est de {commissionLabel} FCFA par annonce, pour
+              30 jours de visibilité — à régler ci-dessous par Mobile Money avant l&apos;envoi
+              en validation.
             </p>
 
             {error && (
@@ -368,7 +407,7 @@ export default function PublierWizard({ commission }: { commission: number }) {
                   ← Revenir aux informations
                 </button>
                 <button className="btn" type="button" onClick={handlePublish} disabled={submitting}>
-                  {submitting ? "Publication…" : "Publier mon annonce"}
+                  {submitting ? "Paiement en cours…" : `Payer ${commissionLabel} FCFA et publier`}
                 </button>
               </div>
             )}

@@ -11,6 +11,8 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { fcfa } from "@/lib/format";
+import { getSettings } from "@/lib/settings";
+import { verifyKkiapayTransaction } from "@/lib/kkiapay";
 
 const publishSchema = z.object({
   name: z.string().trim().min(2, "Indique ton nom et prénom."),
@@ -35,6 +37,9 @@ const publishSchema = z.object({
   // Une entrée par emplacement : soit l'URL d'une vraie photo envoyée sur
   // Vercel Blob, soit le libellé de démonstration si l'emplacement est resté vide.
   photos: z.array(z.string().min(1)).length(4),
+  // Transaction KKiaPay de la commission de publication, déjà effectué
+  // côté client (widget) avant l'appel à cette action — voir PublierWizard.tsx.
+  transactionId: z.string().trim().min(1, "Paiement requis."),
 });
 
 export type PublishInput = z.infer<typeof publishSchema>;
@@ -61,6 +66,27 @@ export async function publishListing(input: PublishInput): Promise<PublishResult
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Formulaire invalide." };
   }
   const v = parsed.data;
+
+  // Une transaction déjà utilisée pour une autre annonce ne peut pas servir
+  // deux fois (contrainte unique en base, vérifiée ici pour un message
+  // clair plutôt qu'une erreur Prisma brute).
+  const alreadyUsed = await prisma.listing.findUnique({
+    where: { transactionId: v.transactionId },
+    select: { ref: true },
+  });
+  if (alreadyUsed) {
+    return { ok: false, error: "Ce paiement a déjà été utilisé pour une autre annonce." };
+  }
+
+  // Le montant attendu est relu ici, pas transmis par le client : la
+  // commission a pu changer entre l'affichage du formulaire et ce clic
+  // (voir /admin/parametres), la vérité est toujours le réglage courant.
+  const { commissionAmount } = await getSettings();
+  try {
+    await verifyKkiapayTransaction(v.transactionId, commissionAmount);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Paiement non confirmé." };
+  }
 
   const advanceMonths = parseInt(v.advance, 10);
   const depositMonths = parseInt(v.deposit, 10);
@@ -90,6 +116,7 @@ export async function publishListing(input: PublishInput): Promise<PublishResult
       featured: false,
       publishedAt: "à l'instant",
       status: "en_attente",
+      transactionId: v.transactionId,
 
       owner: v.name,
       ownerSince: String(new Date().getFullYear()),

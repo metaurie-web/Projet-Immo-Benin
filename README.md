@@ -198,8 +198,8 @@ mon-appart/
    │  ├─ FavoriteButton.tsx      Bouton favori, sur toute carte/fiche d'annonce
    │  ├─ ProfileForm.tsx         Formulaire de /espace-visiteur
    │  ├─ AnnoncesBrowser.tsx     Filtres de recherche (interactif)
-   │  ├─ VisiteForm.tsx          Choix d'un vrai créneau + envoi de la demande (submitVisitRequest)
-   │  ├─ PublierWizard.tsx       Assistant 2 étapes
+   │  ├─ VisiteForm.tsx          Choix d'un créneau, paiement KKiaPay (200 FCFA), puis submitVisitRequest
+   │  ├─ PublierWizard.tsx       Assistant 2 étapes, paiement KKiaPay de la commission à l'étape 2
    │  ├─ NewsletterForm.tsx      Alerte SMS
    │  ├─ ConfirmButton.tsx       Confirmer/refuser une demande de visite (espace propriétaire)
    │  ├─ SlotManager.tsx         Ajouter/retirer les créneaux d'une annonce (espace propriétaire)
@@ -222,10 +222,14 @@ mon-appart/
    │  ├─ users.ts          Comptes par rôle, changement de rôle (admin)
    │  ├─ settings.ts       Réglages généraux (SiteSettings)
    │  ├─ auth.ts           Configuration next-auth (fournisseur, sessions, rôles)
-   │  └─ mail.ts           Envoi de l'email de connexion (Brevo, ou console)
+   │  ├─ mail.ts           Envoi des emails (Brevo, ou console)
+   │  ├─ payments.ts        Constantes de paiement (VISIT_FEE_FCFA)
+   │  ├─ kkiapay.ts          Vérification serveur d'un paiement KKiaPay
+   │  └─ useKkiapayListeners.ts  Hook : enregistre les listeners du widget KKiaPay
    │
    └─ types/
-      └─ next-auth.d.ts    Ajoute id/role/verificationStatus aux types de session
+      ├─ next-auth.d.ts    Ajoute id/role/verificationStatus aux types de session
+      └─ kkiapay.d.ts      Types de window.openKkiapayWidget / addSuccessListener…
 ```
 
 ### Composant « serveur » ou « client » ?
@@ -368,8 +372,9 @@ en_attente  →  en_ligne              (visible sur /annonces et sa fiche)
 Depuis peu, `/publier` suppose l'identité du propriétaire déjà vérifiée (voir
 § 11) : le formulaire ne s'occupe plus que du bien lui-même, en 2 étapes.
 
-Pas encore réel : le paiement de la commission (publication gratuite tant
-que Mobile Money n'est pas branché).
+La commission (§ 14) doit être payée à l'étape 2 avant que l'annonce ne soit
+enregistrée — `publishListing()` vérifie le paiement côté serveur avant
+d'écrire quoi que ce soit en base.
 
 ---
 
@@ -505,11 +510,13 @@ en_attente  →  confirmee   (le propriétaire confirme)
 - **Côté visiteur** — `/annonces/[ref]/visite` (connexion requise, redirige
   vers `/connexion?callbackUrl=...` sinon) affiche les vrais créneaux de
   l'annonce (`getSlotsForListing()`, `src/lib/visits.ts`). Le formulaire
-  (`VisiteForm.tsx`) appelle l'action serveur `submitVisitRequest()`
-  (`src/app/annonces/[ref]/visite/actions.ts`), qui vérifie que l'annonce est
-  bien `en_ligne`, enregistre la demande et alerte le propriétaire par email
-  (`sendVisitRequestEmail()`, `src/lib/mail.ts`) — sauf sur les annonces de
-  démonstration, qui n'ont pas de compte propriétaire réel à notifier
+  (`VisiteForm.tsx`) déclenche d'abord le paiement des 200 FCFA (§ 14), puis
+  appelle l'action serveur `submitVisitRequest()`
+  (`src/app/annonces/[ref]/visite/actions.ts`), qui revérifie ce paiement,
+  vérifie que l'annonce est bien `en_ligne`, enregistre la demande et alerte
+  le propriétaire par email (`sendVisitRequestEmail()`, `src/lib/mail.ts`)
+  — sauf sur les annonces de démonstration, qui n'ont pas de compte
+  propriétaire réel à notifier
 - **Côté propriétaire** — `/espace-proprietaire` liste les demandes reçues
   sur ses annonces (`getVisitRequestsForOwner()`) avec les boutons Confirmer
   / Refuser (`ConfirmButton.tsx` → `confirmVisitRequestAction()` /
@@ -525,7 +532,46 @@ en_attente  →  confirmee   (le propriétaire confirme)
 
 ---
 
-## 14. Ce qui n'est PAS encore branché
+## 14. Paiement Mobile Money (KKiaPay)
+
+Deux paiements réels, tous les deux vérifiés **côté serveur** avant
+d'écrire quoi que ce soit en base — jamais sur la seule foi de l'événement
+client, falsifiable depuis le navigateur :
+
+| Paiement | Montant | Déclenché depuis |
+|---|---|---|
+| Demande de visite | 200 FCFA (fixe, `VISIT_FEE_FCFA` dans `src/lib/payments.ts`) | `VisiteForm.tsx`, avant `submitVisitRequest()` |
+| Publication d'une annonce | `commissionAmount` (réglable, `/admin/parametres`) | `PublierWizard.tsx`, avant `publishListing()` |
+
+- **Widget** (`src/app/layout.tsx` charge `https://cdn.kkiapay.me/k.js`
+  site-wide) : `window.openKkiapayWidget({ amount, key, sandbox, ... })`
+  ouvre le paiement ; `window.addSuccessListener()` /
+  `addFailedListener()` préviennent du résultat. Le script se charge de
+  façon asynchrone (`strategy="afterInteractive"`) : le hook
+  `useKkiapayListeners()` (`src/lib/useKkiapayListeners.ts`) réessaie
+  jusqu'à ce que ces fonctions existent avant de s'enregistrer, sinon
+  l'inscription rate silencieusement si le composant se monte avant que
+  le script ait fini de charger
+- **Vérification serveur** (`verifyKkiapayTransaction()`,
+  `src/lib/kkiapay.ts`, via `@kkiapay-org/nodejs-sdk`) : relit la
+  transaction chez KKiaPay (`k.verify(transactionId)`), exige
+  `status === "SUCCESS"` et un montant exactement égal à celui attendu —
+  pour la commission, relu depuis `getSettings()` au moment du paiement,
+  jamais depuis une valeur transmise par le client
+- **Anti-rejeu** : `VisitRequest.transactionId` et `Listing.transactionId`
+  sont uniques en base — une transaction déjà utilisée pour une demande
+  ou une annonce ne peut pas servir une seconde fois
+- **Clés** : `NEXT_PUBLIC_KKIAPAY_PUBLIC_KEY` et `NEXT_PUBLIC_KKIAPAY_SANDBOX`
+  sont lues par le widget dans le navigateur ; `KKIAPAY_PRIVATE_KEY` et
+  `KKIAPAY_SECRET_KEY` ne quittent jamais le serveur. Compte et clés sur
+  <https://kkiapay.me> (tableau de bord → Développeurs) — les clés `tpk_`/
+  `tsk_` sont des clés de **test** : `NEXT_PUBLIC_KKIAPAY_SANDBOX` doit
+  rester `"true"` tant que ce sont celles-ci, `"false"` avec de vraies
+  clés en production
+
+---
+
+## 15. Ce qui n'est PAS encore branché
 
 | Action | État actuel | Étape suivante |
 |---|---|---|
@@ -539,13 +585,13 @@ en_attente  →  confirmee   (le propriétaire confirme)
 | Photos | ✅ vrai upload (Vercel Blob) | — |
 | Espace propriétaire | ✅ vraies annonces, demandes de visite et créneaux réels | — |
 | Admin | ✅ comptes, annonces (toutes), réglages, modération | — |
-| Demande de visite | ✅ enregistrée en base, email au propriétaire puis au visiteur | — |
+| Demande de visite | ✅ enregistrée en base, email au propriétaire puis au visiteur, paiement 200 FCFA vérifié | — |
+| Paiement de la commission | ✅ Mobile Money (KKiaPay), vérifié côté serveur avant publication | — |
 | Alerte SMS | affiche un message, rien n'est envoyé | route API + service de SMS/email |
-| Paiement de la commission | publication gratuite pour l'instant | intégration MTN MoMo / Moov Money |
 
 ---
 
-## 15. Commandes utiles
+## 16. Commandes utiles
 
 | Commande | Effet |
 |---|---|

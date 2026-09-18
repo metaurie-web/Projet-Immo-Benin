@@ -35,6 +35,11 @@ model Listing {
   featured     Boolean  @default(false)
   publishedAt  String // libellé lisible ("il y a 3 jours") — deviendra une vraie date plus tard
 
+  /// Transaction KKiaPay (commission de publication) vérifiée côté serveur
+  /// avant la création de cette ligne — voir src/lib/kkiapay.ts. Vide pour
+  /// les annonces de démonstration, publiées avant ce paiement.
+  transactionId String? @unique
+
   /// Cycle de vie d'une annonce :
   /// "en_attente" (déposée, pas encore contrôlée) → "en_ligne" (validée, visible
   /// publiquement) ou "correction_demandee" / "refusee". "expiree" plus tard.
@@ -165,6 +170,10 @@ model VisitRequest {
   name        String
   phone       String
   message     String?
+
+  /// Transaction KKiaPay (200 FCFA) vérifiée côté serveur avant la
+  /// création de cette ligne — voir src/lib/kkiapay.ts.
+  transactionId String? @unique
 
   /// "en_attente" (par défaut) | "confirmee" | "refusee".
   status     String   @default("en_attente")

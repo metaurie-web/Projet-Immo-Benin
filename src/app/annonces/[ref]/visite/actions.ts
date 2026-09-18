@@ -7,12 +7,17 @@ import { revalidatePath } from "next/cache";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { sendVisitRequestEmail } from "@/lib/mail";
+import { verifyKkiapayTransaction } from "@/lib/kkiapay";
+import { VISIT_FEE_FCFA } from "@/lib/payments";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Indique ton nom et prénom."),
   phone: z.string().trim().min(8, "Numéro de téléphone invalide."),
   message: z.string().trim().max(500).optional(),
   slotLabel: z.string().trim().min(1, "Choisis un créneau."),
+  // Transaction KKiaPay du paiement des 200 FCFA, déjà effectué côté
+  // client (widget) avant l'appel à cette action — voir VisiteForm.tsx.
+  transactionId: z.string().trim().min(1, "Paiement requis."),
 });
 
 export type SubmitVisitInput = z.infer<typeof schema>;
@@ -47,6 +52,23 @@ export async function submitVisitRequest(
     return { ok: false, error: "Cette annonce n'est plus disponible." };
   }
 
+  // Une transaction déjà utilisée pour une autre demande ne peut pas servir
+  // deux fois (contrainte unique en base, vérifiée ici pour un message
+  // clair plutôt qu'une erreur Prisma brute).
+  const alreadyUsed = await prisma.visitRequest.findUnique({
+    where: { transactionId: v.transactionId },
+    select: { id: true },
+  });
+  if (alreadyUsed) {
+    return { ok: false, error: "Ce paiement a déjà été utilisé pour une autre demande." };
+  }
+
+  try {
+    await verifyKkiapayTransaction(v.transactionId, VISIT_FEE_FCFA);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Paiement non confirmé." };
+  }
+
   await prisma.visitRequest.create({
     data: {
       listingRef,
@@ -55,6 +77,7 @@ export async function submitVisitRequest(
       phone: v.phone,
       message: v.message || null,
       requesterId: session.user.id,
+      transactionId: v.transactionId,
     },
   });
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import { Cormorant_Garamond, Lora } from "next/font/google";
 import "./globals.css";
 import SiteHeader from "@/components/SiteHeader";
@@ -50,6 +51,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </main>
           <SiteFooter />
         </AuthProvider>
+        {/* Widget de paiement Mobile Money (demandes de visite, publication
+            d'une annonce) — pose openKkiapayWidget/addSuccessListener/
+            addFailedListener sur window, voir src/types/kkiapay.d.ts. */}
+        <Script src="https://cdn.kkiapay.me/k.js" strategy="afterInteractive" />
       </body>
     </html>
   );
